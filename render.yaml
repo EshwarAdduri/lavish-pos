@@ -1,0 +1,27 @@
+# Render "Blueprint": tells Render how to run the app. Used once when you first connect the repo.
+services:
+  - type: web
+    name: lavish-pos
+    runtime: python
+    plan: free
+    region: singapore          # closest Render region to India; put Supabase in Singapore too
+    branch: main
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi --workers 2 --threads 2 --timeout 60 --access-logfile -
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false            # paste the Supabase "Session pooler" URI when Render asks
+      - key: OWNER_USERNAME
+        value: owner
+      - key: OWNER_PASSWORD
+        sync: false            # choose a strong password when Render asks
+      - key: ALLOWED_HOSTS
+        sync: false            # e.g. lavishshawarma.com,www.lavishshawarma.com  (onrender.com is added automatically)
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false            # e.g. https://lavishshawarma.com,https://www.lavishshawarma.com

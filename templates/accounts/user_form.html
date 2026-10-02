@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% if obj %}Edit {{ obj.username }}{% else %}Add staff{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/team/">← Staff &amp; devices</a><h1>{% if obj %}Edit {{ obj }}{% else %}Add staff member{% endif %}</h1></div></div>
+<form method="post" class="card card-pad form" style="max-width:560px" autocomplete="off">
+  {% csrf_token %}
+  {% include "partials/form_fields.html" %}
+  <div class="alert alert-info small">Staff can take orders and payments. Cancelling a bill or giving a discount above your limit needs your approval.</div>
+  <div class="row"><button class="btn btn-primary btn-lg">Save</button><a class="btn btn-lg btn-ghost" href="/team/">Cancel</a></div>
+</form>
+{% endblock %}

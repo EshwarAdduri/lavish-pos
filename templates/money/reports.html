@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load static lavish %}
+{% block title %}Reports{% endblock %}
+{% block topbar_title %}Reports{% endblock %}
+{% block head %}<script defer src="{% static 'vendor/chart.min.js' %}"></script><script defer src="{% static 'js/charts.js' %}"></script>{% endblock %}
+{% block content %}
+{{ chart|json_script:"chart-data" }}
+<div class="page-head">
+  <div><h1>Reports</h1><div class="sub">{{ start|date:"d M Y" }} – {{ end|date:"d M Y" }} ({{ p.days }} day{{ p.days|pluralize }})</div></div>
+  <div class="toolbar">
+    <a class="btn" href="/money/export/report.xlsx{% qs %}">{% icon 'download' %} Excel</a>
+    <a class="btn" href="/money/export/orders.csv{% qs %}">{% icon 'download' %} Orders CSV</a>
+    <a class="btn" href="/money/export/items.csv{% qs %}">{% icon 'download' %} Items CSV</a>
+  </div>
+</div>
+<div class="mb">{% include "money/_range.html" %}</div>
+
+<div class="kpis six">
+  <div class="kpi hero"><div class="label">Sales</div><div class="value">{{ p.sales|inr }}</div><div class="hint">{{ p.orders }} bills</div></div>
+  <div class="kpi"><div class="label">Average bill</div><div class="value">{{ p.avg_bill|inr }}</div></div>
+  <div class="kpi"><div class="label">Discounts</div><div class="value">{{ p.discounts|inr }}</div></div>
+  <div class="kpi"><div class="label">Expenses</div><div class="value">{{ p.expenses|inr }}</div></div>
+  <div class="kpi"><div class="label">Sales − expenses</div><div class="value {% if p.profit < 0 %}down{% else %}up{% endif %}">{{ p.profit|inr }}</div></div>
+  <div class="kpi"><div class="label">Cancelled</div><div class="value">{{ p.cancelled }}</div></div>
+</div>
+
+<div class="card mt"><div class="card-head"><h2>Sales by day</h2></div><div class="card-body"><div class="chart-box"><canvas id="ch-daily"></canvas></div></div></div>
+<div class="grid-2 mt">
+  <div class="card"><div class="card-head"><h2>By hour of day</h2></div><div class="card-body"><div class="chart-box sm"><canvas id="ch-hour"></canvas></div></div></div>
+  <div class="card"><div class="card-head"><h2>By day of week</h2></div><div class="card-body"><div class="chart-box sm"><canvas id="ch-weekday"></canvas></div></div></div>
+</div>
+<div class="grid-2 mt">
+  <div class="card"><div class="card-head"><h2>Payment methods</h2></div><div class="card-body"><div class="chart-box sm"><canvas id="ch-methods"></canvas></div></div></div>
+  <div class="card"><div class="card-head"><h2>Order types</h2></div><div class="card-body"><div class="chart-box sm"><canvas id="ch-types"></canvas></div></div></div>
+</div>
+
+<div class="grid-2 mt" style="align-items:start">
+  <div class="card"><div class="card-head"><h2>Top-selling items</h2></div><div class="table-wrap"><table class="table compact">
+    <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead>
+    <tbody>{% for r in p.top_items %}<tr><td>{{ r.item_name }}{% if r.variant_name != "Regular" %} <span class="muted">({{ r.variant_name }})</span>{% endif %}</td><td class="r num">{{ r.qty }}</td><td class="r num">{{ r.amount|inr }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="muted">No sales.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="stack">
+    <div class="card"><div class="card-head"><h2>By category</h2></div><div class="table-wrap"><table class="table compact">
+      <tbody>{% for r in p.by_category %}<tr><td>{{ r.category_name }}</td><td class="r num">{{ r.qty }}</td><td class="r num">{{ r.amount|inr }}</td><td style="width:30%"><div class="meter"><span style="width:{% widthratio r.amount p.sales 100 %}%"></span></div></td></tr>
+      {% empty %}<tr><td class="muted">—</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="card"><div class="card-head"><h2>Staff-wise sales</h2></div><div class="table-wrap"><table class="table compact">
+      <tbody>{% for r in p.by_staff %}<tr><td>{{ r.created_by__display_name|default:r.created_by__username }}</td><td class="r num">{{ r.n }} bills</td><td class="r num">{{ r.s|inr }}</td></tr>
+      {% empty %}<tr><td class="muted">—</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="card"><div class="card-head"><h2>Expenses by type</h2><a class="btn btn-sm btn-ghost" href="/money/expenses/{% qs %}">All</a></div><div class="table-wrap"><table class="table compact">
+      <tbody>{% for r in p.exp_by_cat %}<tr><td>{{ exp_labels|get:r.category }}</td><td class="r num">{{ r.s|inr }}</td></tr>
+      {% empty %}<tr><td class="muted">No expenses recorded.</td></tr>{% endfor %}</tbody></table></div></div>
+  </div>
+</div>
+{% endblock %}

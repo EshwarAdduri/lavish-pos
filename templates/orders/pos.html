@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% load static lavish %}
+{% block title %}Billing{% endblock %}
+{% block topbar_title %}Billing{% endblock %}
+{% block main_class %}flush{% endblock %}
+{% block head %}<script defer src="{% static 'js/pos.js' %}"></script>{% endblock %}
+
+{% block content %}
+{{ menu|json_script:"menu-data" }}
+{{ pos_config|json_script:"pos-config" }}
+{{ edit|json_script:"edit-data" }}
+
+<div class="pos" x-data="posApp()" x-cloak>
+
+  <!-- ============================================== MENU -->
+  <section class="pos-menu">
+    <div class="pos-top">
+      <template x-if="edit">
+        <div class="alert alert-info">{% icon 'edit' %}
+          <div>Editing bill <strong x-text="edit.bill"></strong>. Save to update it.
+            <a href="#" @click.prevent="clear(true)">Stop editing</a></div>
+        </div>
+      </template>
+      <div class="search">
+        {% icon 'search' %}
+        <input x-ref="search" type="search" placeholder="Search menu…" x-model="q" autocomplete="off"
+               @keydown.enter.prevent="items.length && tap(items[0])" aria-label="Search menu">
+        <kbd class="only-desktop" x-show="!q">/</kbd>
+      </div>
+      <div class="chips" role="tablist">
+        <button class="chip" :class="{ on: cat === null && !q }" @click="cat = null; q = ''">All</button>
+        <template x-for="c in menu.categories" :key="c.id">
+          <button class="chip" :class="{ on: cat === c.id && !q }" @click="cat = c.id; q = ''" x-text="c.name"></button>
+        </template>
+      </div>
+    </div>
+
+    <div class="pos-grid">
+      <template x-for="it in items" :key="it.id">
+        <button type="button" class="tile" :class="{ 'sold-out': it.soldOut }" @click="tap(it, $event)">
+          <span class="t-qty" x-show="qtyOf(it.id) > 0" x-text="qtyOf(it.id)"></span>
+          <span class="t-name" x-text="it.label"></span>
+          <span class="t-sizes" x-show="it.variants.length > 1" x-text="it.variants.map(v => v.name).join(' · ')"></span>
+          <span class="t-foot">
+            <span class="food-dot" :class="it.food"></span>
+            <span class="t-price" x-text="priceLabel(it)"></span>
+          </span>
+        </button>
+      </template>
+      <div class="empty" x-show="!items.length" style="grid-column: 1 / -1">
+        {% icon 'search' %}<div>No items match “<span x-text="q"></span>”.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== CART -->
+  <aside class="pos-cart" :class="{ open: cartOpen }">
+    <div class="cart-head">
+      <button class="btn btn-ghost btn-icon only-mobile" @click="cartOpen = false" aria-label="Back to menu">{% icon 'left' %}</button>
+      <h2 style="flex:1">Current order <span class="muted small" x-show="count" x-text="'· ' + count + ' item' + (count > 1 ? 's' : '')"></span></h2>
+      <button class="btn btn-ghost btn-sm" @click="clear()" x-show="lines.length">Clear</button>
+    </div>
+
+    <div class="cart-lines">
+      <div class="empty" x-show="!lines.length">
+        {% icon 'bag' 'lg' %}
+        <div>Tap items to add them.</div>
+      </div>
+      <template x-for="l in lines" :key="l.key">
+        <div class="cart-line">
+          <div class="cl-top">
+            <span class="food-dot" :class="l.food" style="margin-top:3px"></span>
+            <div class="cl-name">
+              <span x-text="l.name"></span><span class="muted" x-show="l.size" x-text="' (' + l.size + ')'"></span>
+              <div class="small muted" x-show="l.addons.length" x-text="'+ ' + l.addons.map(a => a.name).join(', ')"></div>
+            </div>
+            <span class="cl-amt" x-text="inr(lineTotal(l))"></span>
+          </div>
+          <div class="spread">
+            <div class="stepper">
+              <button type="button" @click="dec(l)" aria-label="Less">−</button>
+              <span x-text="l.qty"></span>
+              <button type="button" @click="inc(l)" aria-label="More">+</button>
+            </div>
+            <div class="row" style="gap:6px; justify-content:flex-end">
+              <template x-for="a in allowedAddons(l)" :key="a.id">
+                <button type="button" class="chip chip-sm addon" :class="{ on: hasAddon(l, a) }" @click="toggleAddon(l, a)"
+                        x-text="(hasAddon(l, a) ? '✓ ' : '+ ') + a.name + ' ' + inr(a.price)"></button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="cart-foot">
+      <div class="seg full" role="group" aria-label="Order type">
+        <template x-for="t in cfg.orderTypes" :key="t[0]">
+          <button type="button" :aria-pressed="orderType === t[0]" @click="orderType = t[0]" x-text="t[1]"></button>
+        </template>
+      </div>
+      <div x-show="orderType === 'online'" class="row">
+        <template x-for="p in cfg.platforms" :key="p[0]">
+          <button type="button" class="chip chip-sm" :class="{ on: platform === p[0] }" @click="platform = p[0]" x-text="p[1]"></button>
+        </template>
+      </div>
+
+      <details class="disclosure" :open="showExtras" @toggle="showExtras = $el.open">
+        <summary class="spread small"><span>Customer, note &amp; discount</span>
+          <span class="muted" x-text="discountValue ? 'Discount ' + inr(discountValue) : (customerName || '')"></span></summary>
+        <div class="form mt-s">
+          <div class="form-grid two">
+            <input type="text" placeholder="Customer name (optional)" x-model="customerName" maxlength="60">
+            <input type="tel" placeholder="Phone (optional)" x-model="customerPhone" maxlength="20">
+          </div>
+          <input type="text" placeholder="Kitchen note, e.g. less spicy" x-model="note" maxlength="200">
+          <div class="row">
+            <div class="input-money" style="flex:1; min-width:120px">
+              <input type="number" inputmode="decimal" min="0" step="1" placeholder="Discount" x-model="discount">
+            </div>
+            <button type="button" class="btn btn-sm" @click="setDiscountPct(5)">5%</button>
+            <button type="button" class="btn btn-sm" @click="setDiscountPct(10)">10%</button>
+            <button type="button" class="btn btn-sm btn-ghost" @click="setDiscountPct(0)">None</button>
+          </div>
+          <input type="text" placeholder="Reason for discount" x-model="discountNote" x-show="discountValue" maxlength="100">
+          <div class="alert alert-warn small" x-show="capWarning" x-text="capWarning"></div>
+        </div>
+      </details>
+
+      <div class="totals">
+        <div class="spread muted" x-show="discountValue"><span>Subtotal</span><span class="num" x-text="inr(subtotal)"></span></div>
+        <div class="spread muted" x-show="discountValue"><span>Discount</span><span class="num" x-text="'−' + inr(discountValue)"></span></div>
+        <div class="spread grand"><span>Total</span><span class="num" x-text="inr(total)"></span></div>
+      </div>
+      <div class="grid-2" style="grid-template-columns: 1fr 1.6fr; gap:8px">
+        <button class="btn btn-lg" :disabled="!lines.length || saving" @click="submit(false)"
+                x-text="edit ? 'Save changes' : 'Save · pay later'"></button>
+        <button class="btn btn-primary btn-lg" :disabled="!lines.length || saving" @click="openPay()">
+          {% icon 'cash' %} <span x-text="'Pay ' + inr(total)"></span></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- mobile cart bar -->
+  <div class="cart-bar" x-show="lines.length && !cartOpen" x-transition>
+    <div>
+      <div class="small" style="opacity:.75" x-text="count + ' item' + (count > 1 ? 's' : '')"></div>
+      <div class="cb-total" x-text="inr(total)"></div>
+    </div>
+    <button class="btn btn-primary" @click="cartOpen = true">View order {% icon 'right' %}</button>
+  </div>
+
+  <!-- ============================================== SIZE PICKER -->
+  <template x-if="picker">
+    <div class="modal-backdrop" @click.self="picker = null">
+      <div class="modal">
+        <div class="modal-head"><h2 x-text="picker.name"></h2>
+          <button class="btn btn-ghost btn-icon" @click="picker = null" aria-label="Close">{% icon 'x' %}</button></div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:10px">
+          <template x-for="v in picker.variants" :key="v.id">
+            <button class="tile" style="min-height:84px; align-items:center; justify-content:center" @click="add(picker, v)">
+              <span class="t-name" x-text="v.name"></span>
+              <span class="t-price" x-text="inr(v.price)"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============================================== PAYMENT -->
+  <template x-if="payOpen">
+    <div class="modal-backdrop" @click.self="!saving && (payOpen = false)">
+      <div class="modal">
+        <div class="modal-head">
+          <div><div class="muted small">Amount to collect</div><div class="big-token num" x-text="inr(total)"></div></div>
+          <button class="btn btn-ghost btn-icon" @click="payOpen = false" :disabled="saving" aria-label="Close">{% icon 'x' %}</button>
+        </div>
+        <div class="pay-methods">
+          <button type="button" class="pay-method" :class="{ on: method === 'cash' }" @click="method = 'cash'">{% icon 'cash' 'lg' %}Cash</button>
+          <button type="button" class="pay-method" :class="{ on: method === 'upi' }" @click="method = 'upi'">{% icon 'upi' 'lg' %}UPI</button>
+          <button type="button" class="pay-method" :class="{ on: method === 'card' }" @click="method = 'card'">{% icon 'card' 'lg' %}Card</button>
+          <button type="button" class="pay-method" :class="{ on: method === 'online' }" @click="method = 'online'">{% icon 'online' 'lg' %}Online</button>
+        </div>
+
+        <div class="form mt" x-show="method === 'cash'">
+          <div class="field">
+            <label>Cash given by customer (optional)</label>
+            <div class="input-money"><input type="number" inputmode="decimal" min="0" step="1" x-model="tendered" placeholder="e.g. 500"></div>
+          </div>
+          <div class="quick-cash">
+            <button type="button" class="btn btn-sm" @click="tendered = String(total)">Exact</button>
+            <template x-for="v in quickCash" :key="v"><button type="button" class="btn btn-sm" @click="tendered = String(v)" x-text="inr(v)"></button></template>
+          </div>
+          <div class="change-due" x-show="change !== null"><span>Give change</span><span class="num" x-text="inr(change)"></span></div>
+        </div>
+        <div class="form mt" x-show="method === 'upi' || method === 'card'">
+          <div class="field"><label>Reference / last 4 digits (optional)</label><input type="text" x-model="reference" maxlength="60"></div>
+        </div>
+        <div class="alert alert-info mt small" x-show="method === 'online'">Paid to Zomato / Swiggy. It will count as online money.</div>
+
+        <div class="alert alert-bad mt" x-show="error" x-text="error"></div>
+        <label class="check mt small"><input type="checkbox" :checked="autoPrint" @change="toggleAutoPrint()"> Print receipt automatically</label>
+        <button class="btn btn-ok btn-xl btn-block mt" :disabled="saving" @click="submit(true)">
+          <span x-show="!saving">{% icon 'check' %} Confirm payment</span><span x-show="saving">Saving…</span>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============================================== DONE -->
+  <template x-if="done">
+    <div class="modal-backdrop" @click.self="newOrder()">
+      <div class="modal center">
+        <div class="done-check">{% icon 'check' 'lg' %}</div>
+        <div class="muted">Token</div>
+        <div class="big-token" x-text="'#' + done.token"></div>
+        <div class="muted mb" x-text="done.bill + ' · ' + inr(done.total) + (done.balance > 0 ? ' · ' + inr(done.balance) + ' unpaid' : ' · paid')"></div>
+        <div class="change-due mb" x-show="done.change" style="justify-content:center; gap:12px">
+          <span>Give change</span><span class="num" x-text="inr(done.change)"></span></div>
+        <div class="grid-2" style="gap:8px">
+          <button class="btn btn-lg" @click="print(done.id)">{% icon 'print' %} Print receipt</button>
+          <a class="btn btn-lg" :href="'/orders/' + done.id + '/'">{% icon 'orders' %} Open bill</a>
+        </div>
+        <button class="btn btn-primary btn-xl btn-block mt" @click="newOrder()">{% icon 'plus' %} New order</button>
+      </div>
+    </div>
+  </template>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Day close{% endblock %}
+{% block topbar_title %}Day close{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Close the day — {{ day|date:"D d M Y" }}</h1><div class="sub">Count the cash drawer and the stock. The app tells you if anything is missing.</div></div>
+  <div class="toolbar">
+    <a class="btn btn-icon" href="?date={{ prev_day|date:'Y-m-d' }}">{% icon 'left' %}</a>
+    <form method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" onchange="this.form.submit()" style="width:auto"></form>
+    {% if not is_today %}<a class="btn btn-icon" href="?date={{ next_day|date:'Y-m-d' }}">{% icon 'right' %}</a>{% endif %}
+  </div>
+</div>
+{% if existing %}<div class="alert alert-info mb">{% icon 'check' %}<div>Already closed by {{ existing.closed_by }} at {{ existing.closed_at|date:"d M h:i A" }}.{% if user.is_owner %} Saving again will update it. <a href="/money/closings/{{ day|date:'Y-m-d' }}/">View report</a>{% endif %}</div></div>{% endif %}
+{% for e in errors %}<div class="alert alert-bad mb">{{ e }}</div>{% endfor %}
+{% if s.unpaid %}<div class="alert alert-warn mb">{% icon 'alert' %}<div>{{ s.unpaid|inr }} of bills are still unpaid. <a href="/orders/?date={{ day|date:'Y-m-d' }}&paid=unpaid">Collect or cancel them</a> before closing.</div></div>{% endif %}
+
+<div class="kpis six mb">
+  <div class="kpi hero"><div class="label">Sales</div><div class="value">{{ s.sales|inr }}</div><div class="hint">{{ s.orders_count }} bills · {{ s.cancelled_count }} cancelled</div></div>
+  <div class="kpi"><div class="label">Cash</div><div class="value">{{ s.by_method.cash|inr }}</div></div>
+  <div class="kpi"><div class="label">UPI</div><div class="value">{{ s.by_method.upi|inr }}</div></div>
+  <div class="kpi"><div class="label">Card</div><div class="value">{{ s.by_method.card|inr }}</div></div>
+  <div class="kpi"><div class="label">Online</div><div class="value">{{ s.by_method.online|inr }}</div></div>
+  <div class="kpi"><div class="label">Expenses</div><div class="value">{{ s.expenses|inr }}</div><div class="hint">{{ s.expenses_from_drawer|inr }} from drawer</div></div>
+</div>
+
+<form method="post" class="stack" x-data="{ opening: '{{ init.opening|stringformat:"s" }}', counted: '{{ init.counted|stringformat:"s" }}', cashIn: {{ s.by_method.cash|stringformat:"s" }}, out: {{ s.expenses_from_drawer|stringformat:"s" }},
+    get expected() { return Math.round(((parseFloat(this.opening) || 0) + this.cashIn - this.out) * 100) / 100 },
+    get diff() { return this.counted === '' ? null : Math.round(((parseFloat(this.counted) || 0) - this.expected) * 100) / 100 } }">
+  {% csrf_token %}<input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+  <div class="card">
+    <div class="card-head"><h2>{% icon 'cash' %} Cash drawer</h2></div>
+    <div class="card-body form">
+      <div class="form-grid two">
+        <div class="field"><label>Opening cash (start of day)</label><div class="input-money"><input type="number" name="opening_cash" step="0.01" min="0" x-model="opening" inputmode="decimal"></div><div class="help">Filled from yesterday's close. Change it if wrong.</div></div>
+        <div class="field"><label>Cash counted now</label><div class="input-money"><input type="number" name="counted_cash" step="0.01" min="0" x-model="counted" inputmode="decimal" required></div></div>
+      </div>
+      <div class="totals" style="max-width:420px">
+        <div class="spread"><span>Opening</span><span class="num" x-text="inr(parseFloat(opening) || 0)"></span></div>
+        <div class="spread"><span>+ Cash sales</span><span class="num">{{ s.by_method.cash|inr }}</span></div>
+        <div class="spread"><span>− Expenses paid from drawer</span><span class="num">{{ s.expenses_from_drawer|inr }}</span></div>
+        <div class="spread grand" style="font-size:1.1rem"><span>Should be in drawer</span><span class="num" x-text="inr(expected)"></span></div>
+      </div>
+      <template x-if="diff !== null">
+        <div :class="diff < 0 ? 'alert alert-bad' : (diff > 0 ? 'alert alert-info' : 'alert alert-ok')">
+          <strong x-text="diff < 0 ? 'Cash short by ' + inr(-diff) : (diff > 0 ? 'Extra cash ' + inr(diff) : 'Cash matches exactly ✓')"></strong></div>
+      </template>
+      <div class="field" style="max-width:420px"><label>Cash taken out (to owner / bank)</label><div class="input-money"><input type="number" name="cash_removed" step="0.01" min="0" value="{{ init.removed|stringformat:'s' }}" inputmode="decimal"></div><div class="help">What stays in the drawer becomes tomorrow's opening cash.</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>{% icon 'stock' %} Stock count</h2><span class="small muted">Weigh / count what's left. Leave empty to skip an item.</span></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Item</th><th class="r">Should have</th><th class="r" style="width:150px">Counted</th></tr></thead>
+      <tbody>{% for r in stock_rows %}
+        <tr><td><strong>{{ r.item.name }}</strong><div class="small muted">opening {{ r.opening|qty }} + bought {{ r.purchased|qty }} − used {{ r.used|qty }}{% if r.wasted_total %} − wasted {{ r.wasted_total|qty }}{% endif %}</div></td>
+          <td class="r num"><strong>{{ r.expected|qty:r.item.unit }}</strong></td>
+          <td class="r"><input type="number" name="count-{{ r.item.pk }}" step="{% if r.item.unit == 'pcs' %}1{% else %}0.001{% endif %}" min="0" inputmode="decimal" style="text-align:right"
+            value="{% if r.counted is not None %}{{ r.counted|qty }}{% endif %}" placeholder="{{ r.item.unit }}"></td></tr>
+      {% empty %}<tr><td colspan="3" class="muted">No stock items set to “count daily”.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+
+  <div class="card card-pad form">
+    <div class="field"><label>Notes (optional)</label><input type="text" name="notes" maxlength="300" value="{{ init.notes }}" placeholder="e.g. 5 rotis torn, gas cylinder changed"></div>
+    <button class="btn btn-primary btn-xl">{% icon 'lock' %} {% if existing %}Update day close{% else %}Close the day{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

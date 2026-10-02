@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Device{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/team/">← Staff &amp; devices</a><h1>{{ obj }}</h1><div class="sub">{{ obj.user_agent }}</div></div></div>
+<form method="post" class="card card-pad form" style="max-width:520px">
+  {% csrf_token %}
+  {% include "partials/form_fields.html" %}
+  <div class="row"><button class="btn btn-primary btn-lg">Save</button><a class="btn btn-lg btn-ghost" href="/team/">Cancel</a></div>
+</form>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Missing stock report{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/stock/">← Stock</a><h1>Missing stock report</h1><div class="sub">{{ start|date:"d M" }} – {{ end|date:"d M Y" }}. Based on daily counts at day close.</div></div>
+  <form class="toolbar" method="get"><input type="date" name="start" value="{{ start|date:'Y-m-d' }}" style="width:auto"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}" style="width:auto"><button class="btn">Show</button></form></div>
+<div class="kpis four mb">
+  <div class="kpi"><div class="label">Value missing</div><div class="value {% if total_loss %}down{% endif %}">{{ total_loss|neg|inr }}</div><div class="hint">counted less than expected</div></div>
+</div>
+<div class="grid-2" style="align-items:start">
+  <div class="card"><div class="card-head"><h2>By item</h2></div><div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="r">Total difference</th><th class="r">Value</th></tr></thead>
+    <tbody>{% for r in per_item %}<tr><td>{{ r.stock_item__name }}</td>
+      <td class="r num {% if r.var < 0 %}var-neg{% elif r.var > 0 %}var-pos{% endif %}">{{ r.var|qty:r.stock_item__unit }}</td>
+      <td class="r num {% if r.value < 0 %}var-neg{% endif %}">{{ r.value|inr }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="muted">No counts in this period. Count stock at day close to see this.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><div class="card-head"><h2>Used in bills</h2></div><div class="table-wrap"><table class="table">
+    <tbody>{% for u in usage %}<tr><td>{{ u.stock_item__name }}</td><td class="r num">{{ u.qty|neg|qty:u.stock_item__unit }}</td></tr>
+    {% empty %}<tr><td class="muted">No sales yet.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+<div class="card mt"><div class="card-head"><h2>Day by day</h2></div><div class="table-wrap"><table class="table compact">
+  <thead><tr><th>Date</th><th>Item</th><th class="r">Expected</th><th class="r">Counted</th><th class="r">Difference</th><th class="r">Value</th></tr></thead>
+  <tbody>{% for c in rows %}<tr><td>{{ c.business_date|date:"D d M" }}</td><td>{{ c.stock_item }}</td><td class="r num">{{ c.expected_qty|qty }}</td><td class="r num">{{ c.counted_qty|qty }}</td>
+    <td class="r num {% if c.variance < 0 %}var-neg{% else %}var-pos{% endif %}">{{ c.variance|qty:c.stock_item.unit }}</td><td class="r num">{{ c.variance_value|inr }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="muted">No differences. 👍</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

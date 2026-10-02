@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="{{ back|default:'/menu/' }}">← Back</a><h1>{% if obj %}Edit {{ title|lower }}{% else %}New {{ title|lower }}{% endif %}</h1></div></div>
+<form method="post" class="card card-pad form" style="max-width:560px">
+  {% csrf_token %}
+  {% include "partials/form_fields.html" %}
+  <div class="spread">
+    <div class="row"><button class="btn btn-primary btn-lg" name="save">Save</button><a class="btn btn-lg btn-ghost" href="{{ back|default:'/menu/' }}">Cancel</a></div>
+    {% if can_delete %}<button class="btn btn-danger" name="delete" value="1" formnovalidate data-confirm-btn>Delete</button>{% endif %}
+  </div>
+</form>
+<script>document.querySelectorAll("[data-confirm-btn]").forEach(function(b){b.addEventListener("click",function(e){if(!confirm("Delete this? It stays in the audit log.")) e.preventDefault();});});</script>
+{% endblock %}

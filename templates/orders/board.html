@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Kitchen board{% endblock %}
+{% block topbar_title %}Kitchen board{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Kitchen board</h1><div class="sub">Open orders. Updates by itself on every device.</div></div></div>
+<div id="board" hx-get="/orders/board/" hx-trigger="orders-changed from:body, every 60s" hx-swap="innerHTML">
+  {% include "orders/_board_cols.html" %}
+</div>
+{% endblock %}

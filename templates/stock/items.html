@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Stock items{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/stock/">← Stock</a><h1>Stock items</h1><div class="sub">Raw materials you buy. Purchase price updates automatically when you record a purchase.</div></div>
+  <a class="btn btn-primary" href="/stock/items/new/">{% icon 'plus' %} Add stock item</a></div>
+<div class="card"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Item</th><th>Unit</th><th class="r">Cost / unit</th><th class="r">Low-stock alert at</th><th>Dashboard</th><th>Daily count</th><th></th></tr></thead>
+  <tbody>{% for i in items %}
+    <tr><td><strong>{{ i.name }}</strong>{% if not i.is_active %} <span class="pill pill-unpaid">off</span>{% endif %}</td><td>{{ i.get_unit_display }}</td>
+      <td class="r num">{{ i.cost_per_unit|inr }}</td><td class="r num">{{ i.low_stock_level|qty:i.unit }}</td>
+      <td>{% if i.is_key %}✓{% endif %}</td><td>{% if i.count_daily %}✓{% endif %}</td>
+      <td class="r"><a class="btn btn-sm" href="/stock/items/{{ i.pk }}/">Edit</a></td></tr>
+  {% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

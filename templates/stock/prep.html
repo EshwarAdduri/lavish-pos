@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Prep plan{% endblock %}
+{% block topbar_title %}Prep plan{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Prep plan — {{ day|date:"l, d M" }}</h1><div class="sub">{{ fc.method }}</div></div>
+  <form class="toolbar" method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" style="width:auto">
+    <label class="small muted">Extra buffer</label><select name="buffer" style="width:auto">
+      <option value="0" {% if buffer == 0 %}selected{% endif %}>0%</option><option value="10" {% if buffer == 10 %}selected{% endif %}>10%</option>
+      <option value="15" {% if buffer == 15 %}selected{% endif %}>15%</option><option value="20" {% if buffer == 20 %}selected{% endif %}>20%</option></select>
+    <button class="btn">Update</button></form></div>
+<div class="kpis four mb">
+  <div class="kpi hero"><div class="label">Expected sales</div><div class="value">{{ fc.expected_sales|inr }}</div><div class="hint">{{ fc.expected_orders }} orders</div></div>
+  {% for r in plan %}{% if r.item.is_key %}
+  <div class="kpi"><div class="label">{{ r.item.name }}</div><div class="value">{{ r.prepare|qty:r.item.unit }}</div>
+    <div class="hint">{% if r.buy is None %}stock not tracked yet{% elif r.buy > 0 %}<span class="down">buy {{ r.buy|qty:r.item.unit }}</span>{% if r.have > 0 %} (have {{ r.have|qty }}){% endif %}{% else %}<span class="up">enough in stock</span>{% endif %}</div></div>
+  {% endif %}{% endfor %}
+</div>
+<div class="grid-2" style="align-items:start">
+  <div class="card"><div class="card-head"><h2>Stock to prepare</h2><span class="small muted">incl. {{ buffer }}% buffer</span></div><div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="r">Expected use</th><th class="r">Prepare</th><th class="r">In stock now</th><th class="r">To buy</th></tr></thead>
+    <tbody>{% for r in plan %}<tr><td><strong>{{ r.item.name }}</strong></td><td class="r num">{{ r.need|qty:r.item.unit }}</td><td class="r num"><strong>{{ r.prepare|qty:r.item.unit }}</strong></td>
+      <td class="r num">{% if r.have is None %}<span class="muted">not tracked</span>{% elif r.have < 0 %}<span class="muted" title="Purchases not fully recorded">?</span>{% else %}{{ r.have|qty }}{% endif %}</td>
+      <td class="r num {% if r.buy %}var-neg{% endif %}">{% if r.buy %}{{ r.buy|qty:r.item.unit }}{% else %}—{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5"><div class="empty">No history yet. After a week of billing this fills in.</div></td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><div class="card-head"><h2>Expected items sold</h2></div><div class="table-wrap"><table class="table compact">
+    <tbody>{% for i in fc.items %}<tr><td>{{ i.name }}</td><td class="r num">{{ i.qty }}</td></tr>{% empty %}<tr><td class="muted">—</td></tr>{% endfor %}</tbody></table></div>
+    {% if fc.reference_days %}<div class="card-foot small muted">Based on: {% for d in fc.reference_days %}{{ d|date:"d M" }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}</div>
+</div>
+{% endblock %}

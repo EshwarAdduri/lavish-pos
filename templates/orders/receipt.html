@@ -1,0 +1,45 @@
+{% load lavish %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ order.bill_number }}</title>
+{% load static %}<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<style>@page { size: {{ width }}mm auto; margin: 0; } body { background: #eee; } @media print { body { background: #fff; } }</style>
+</head>
+<body>
+<div class="no-print row" style="justify-content:center;padding:12px;gap:8px">
+  <button class="btn btn-primary" onclick="window.print()">Print</button>
+  <a class="btn" href="?w=58">58 mm</a><a class="btn" href="?w=80">80 mm</a>
+  <a class="btn" href="/orders/{{ order.pk }}/receipt.pdf?w={{ width }}">PDF</a>
+  <a class="btn btn-ghost" href="/orders/{{ order.pk }}/">Back</a>
+</div>
+<div class="receipt w{{ width }}">
+  <div class="rc-center"><div class="rc-shop">{{ shop.shop_name }}</div>
+    {% if shop.tagline %}<div>{{ shop.tagline }}</div>{% endif %}
+    {% if shop.address %}<div>{{ shop.address }}</div>{% endif %}
+    {% if shop.phone %}<div>Ph: {{ shop.phone }}</div>{% endif %}</div>
+  <div class="rc-rule"></div>
+  <div class="rc-row"><strong>Bill {{ order.bill_number }}</strong><strong>Token #{{ order.token_no }}</strong></div>
+  <div class="rc-row"><span>{{ order.created_at|date:"d M Y h:i A" }}</span><span>{{ order.get_order_type_display }}{% if order.platform %} · {{ order.get_platform_display }}{% endif %}</span></div>
+  {% if order.customer_name %}<div>Customer: {{ order.customer_name }}</div>{% endif %}
+  <div class="rc-rule"></div>
+  {% for i in order.items.all %}
+    <div class="rc-row"><span>{{ i.quantity }} x {{ i.display_name }}</span><span>{{ i.line_total|inr }}</span></div>
+    {% for a in i.addons.all %}<div class="rc-sub">+ {{ a.name }} ({{ a.price|inr }})</div>{% endfor %}
+    {% if i.note %}<div class="rc-sub">note: {{ i.note }}</div>{% endif %}
+  {% endfor %}
+  <div class="rc-rule"></div>
+  {% if order.discount_amount %}
+    <div class="rc-row"><span>Subtotal</span><span>{{ order.subtotal|inr }}</span></div>
+    <div class="rc-row"><span>Discount</span><span>-{{ order.discount_amount|inr }}</span></div>
+  {% endif %}
+  <div class="rc-row rc-total"><span>TOTAL</span><span>{{ order.total|inr }}</span></div>
+  {% if order.payments.all %}<div class="rc-rule"></div>
+    {% for p in order.payments.all %}<div class="rc-row"><span>{{ p.get_method_display }}{% if p.amount < 0 %} refund{% endif %}</span><span>{{ p.amount|inr }}</span></div>
+      {% if p.cash_tendered %}<div class="rc-row rc-sub"><span>Given / change</span><span>{{ p.cash_tendered|inr }} / {{ p.change|inr }}</span></div>{% endif %}{% endfor %}
+    {% if order.balance > 0 %}<div class="rc-row"><strong>Balance due</strong><strong>{{ order.balance|inr }}</strong></div>{% endif %}
+  {% endif %}
+  {% if order.status == "cancelled" %}<div class="rc-rule"></div><div class="rc-center"><strong>*** CANCELLED ***</strong></div>{% endif %}
+  <div class="rc-rule"></div>
+  <div class="rc-center">{{ shop.receipt_footer }}</div>
+</div>
+{% if autoprint %}<script>window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 250); });</script>{% endif %}
+</body></html>

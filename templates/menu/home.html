@@ -1,0 +1,55 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Menu & prices{% endblock %}
+{% block topbar_title %}Menu & prices{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Menu &amp; prices</h1><div class="sub">Changes show on every device within a few seconds. Old bills keep their original prices.</div></div>
+  <div class="toolbar">
+    <a class="btn" href="/menu/categories/new/">{% icon 'plus' %} Category</a>
+    <a class="btn" href="/menu/extras/new/">{% icon 'plus' %} Extra</a>
+    <a class="btn btn-primary" href="/menu/items/new/">{% icon 'plus' %} Item</a>
+  </div>
+</div>
+
+<div class="stack">
+{% for c in categories %}
+  <div class="card">
+    <div class="card-head">
+      <h2>{{ c.name }} {% if not c.is_active %}<span class="pill pill-unpaid">Hidden</span>{% endif %}</h2>
+      <div class="row"><a class="btn btn-sm btn-ghost" href="/menu/categories/{{ c.pk }}/">{% icon 'edit' 'sm' %} Edit</a>
+        <a class="btn btn-sm" href="/menu/items/new/?category={{ c.pk }}">{% icon 'plus' 'sm' %} Add item</a></div>
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Item</th><th>Sizes &amp; prices</th><th>Extras</th><th class="center">On menu</th><th class="center">Sold out</th><th></th></tr></thead>
+      <tbody>
+      {% for it in c.items.all %}
+        <tr>
+          <td><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="food-dot {{ it.food_type }}"></span><strong>{{ it.name }}</strong></span></td>
+          <td>{% for v in it.variants.all %}<span class="pill {% if not v.is_active %}pill-cancelled{% endif %}" style="margin:2px">{% if v.name != "Regular" %}{{ v.name }} {% endif %}{{ v.price|inr }}</span>{% endfor %}</td>
+          <td class="small muted">{% for a in it.addons.all %}{{ a.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+          <td class="center">{% include "menu/_toggle.html" with item=it field="is_active" %}</td>
+          <td class="center">{% include "menu/_toggle.html" with item=it field="is_sold_out" %}</td>
+          <td class="r"><a class="btn btn-sm" href="/menu/items/{{ it.pk }}/">{% icon 'edit' 'sm' %} Edit</a></td>
+        </tr>
+      {% empty %}<tr><td colspan="6" class="muted">No items yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+{% empty %}
+  <div class="card empty">No menu yet. Run <span class="mono">python manage.py seed_shop</span> or add a category.</div>
+{% endfor %}
+
+  <div class="card">
+    <div class="card-head"><h2>Extras / add-ons</h2><a class="btn btn-sm" href="/menu/extras/new/">{% icon 'plus' 'sm' %} Add extra</a></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Extra</th><th>Price</th><th>Status</th><th></th></tr></thead>
+      <tbody>{% for a in addons %}
+        <tr><td><strong>{{ a.name }}</strong></td><td>{{ a.price|inr }}</td>
+          <td>{% if a.is_active %}<span class="pill pill-paid">On</span>{% else %}<span class="pill pill-unpaid">Off</span>{% endif %}</td>
+          <td class="r"><a class="btn btn-sm" href="/menu/extras/{{ a.pk }}/">Edit</a></td></tr>
+      {% empty %}<tr><td colspan="4" class="muted">No extras yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="card-foot small muted">Tick which extras are allowed on each item from the item's Edit page.</div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Staff & devices{% endblock %}
+{% block topbar_title %}Staff & devices{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Staff &amp; devices</h1><div class="sub">Who can log in, and which phones/laptops have used the app.</div></div>
+  <a class="btn btn-primary" href="/team/users/new/">{% icon 'plus' %} Add staff</a>
+</div>
+<div class="card">
+  <div class="card-head"><h2>People</h2></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+    <tbody>{% for u in users %}
+      <tr><td><strong>{{ u }}</strong></td><td class="mono">{{ u.username }}</td>
+        <td>{% if u.is_owner %}<span class="pill pill-brand">Owner</span>{% else %}<span class="pill">Staff</span>{% endif %}</td>
+        <td>{% if u.is_active %}<span class="pill pill-paid">Active</span>{% else %}<span class="pill pill-unpaid">Disabled</span>{% endif %}</td>
+        <td class="muted small">{{ u.last_login|date:"d M, h:i A"|default:"never" }}</td>
+        <td class="r"><a class="btn btn-sm" href="/team/users/{{ u.pk }}/">{% icon 'edit' 'sm' %} Edit</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+<div class="card mt">
+  <div class="card-head"><h2>Devices</h2><span class="muted small">Every bill records which device made it</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Device</th><th>Last used by</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for d in devices %}
+      <tr><td><strong>{{ d }}</strong>{% if request.device and d.pk == request.device.pk %} <span class="pill pill-brand">this device</span>{% endif %}
+        <div class="small muted" style="max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.user_agent }}</div></td>
+        <td>{{ d.last_user|default:"—" }}</td><td class="small muted">{{ d.last_seen_at|timesince }} ago</td>
+        <td>{% if d.is_blocked %}<span class="pill pill-unpaid">Blocked</span>{% else %}<span class="pill pill-paid">Allowed</span>{% endif %}</td>
+        <td class="r"><a class="btn btn-sm" href="/team/devices/{{ d.pk }}/">Rename / block</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No devices yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

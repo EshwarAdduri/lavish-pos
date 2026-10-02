@@ -1,0 +1,139 @@
+{% load lavish %}
+<div class="page-head">
+  <div>
+    <a class="small" href="/orders/?date={{ order.business_date|date:'Y-m-d' }}">← Orders</a>
+    <h1>Token #{{ order.token_no }} <span class="muted mono" style="font-size:.9rem">{{ order.bill_number }}</span></h1>
+    <div class="row mt-s" style="gap:6px">
+      <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span>
+      {% if order.status != "cancelled" %}{% if order.is_paid %}<span class="pill pill-paid">Paid</span>{% else %}<span class="pill pill-unpaid">{{ order.balance|inr }} due</span>{% endif %}{% endif %}
+      <span class="pill">{{ order.get_order_type_display }}{% if order.platform %} · {{ order.get_platform_display }}{% endif %}</span>
+      <span class="small muted">{{ order.created_at|date:"D d M, h:i A" }} · {{ order.created_by }}{% if order.device %} · {{ order.device }}{% endif %}</span>
+    </div>
+  </div>
+  <div class="toolbar">
+    <a class="btn" href="/orders/{{ order.pk }}/receipt/?print=1" target="_blank">{% icon 'print' %} Print</a>
+    <a class="btn" href="/orders/{{ order.pk }}/receipt.pdf" target="_blank">{% icon 'file' %} PDF</a>
+    {% if can_edit %}<a class="btn" href="/pos/?edit={{ order.pk }}">{% icon 'edit' %} Edit items</a>{% endif %}
+  </div>
+</div>
+
+{% if order.status == "cancelled" %}
+<div class="alert alert-bad mb">{% icon 'alert' %}<div>Cancelled by {{ order.cancelled_by }} on {{ order.cancelled_at|date:"d M, h:i A" }}. Reason: {{ order.cancel_reason }}</div></div>
+{% endif %}
+{% if order.balance < 0 %}
+<div class="alert alert-warn mb">{% icon 'alert' %}<div>Customer paid {{ order.balance|neg|inr }} more than the bill. Give a refund below.</div></div>
+{% endif %}
+
+<div class="grid-2" style="align-items:start">
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Items</h2><span class="muted small">{{ order.item_count }} items</span></div>
+      <div class="table-wrap"><table class="table">
+        <tbody>{% for i in order.items.all %}
+          <tr><td><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="food-dot {{ i.food_type }}"></span><span><strong>{{ i.quantity }} × {{ i.display_name }}</strong>
+            {% for a in i.addons.all %}<div class="small muted">+ {{ a.name }} ({{ a.price|inr }})</div>{% endfor %}
+            {% if i.note %}<div class="small muted">Note: {{ i.note }}</div>{% endif %}</span></span></td>
+            <td class="r num small muted">{{ i.each_price|inr }} each</td>
+            <td class="r num"><strong>{{ i.line_total|inr }}</strong></td></tr>
+        {% endfor %}</tbody>
+        <tfoot>
+          {% if order.discount_amount %}
+          <tr><td colspan="2">Subtotal</td><td class="r num">{{ order.subtotal|inr }}</td></tr>
+          <tr><td colspan="2">Discount {% if order.discount_note %}<span class="small muted">({{ order.discount_note }})</span>{% endif %}</td><td class="r num">−{{ order.discount_amount|inr }}</td></tr>
+          {% endif %}
+          <tr><td colspan="2" style="font-size:1.1rem">Total</td><td class="r num" style="font-size:1.1rem">{{ order.total|inr }}</td></tr>
+        </tfoot>
+      </table></div>
+      {% if order.note or order.customer_name %}<div class="card-foot small">{% if order.customer_name %}Customer: <strong>{{ order.customer_name }}</strong> {{ order.customer_phone }}{% endif %}{% if order.note %}<div>Note: {{ order.note }}</div>{% endif %}</div>{% endif %}
+    </div>
+
+    {% if next_statuses %}
+    <div class="card card-pad">
+      <h3 class="mb">Kitchen status</h3>
+      <div class="row">{% for s, label in next_statuses %}
+        <form method="post" action="/orders/{{ order.pk }}/status/">{% csrf_token %}<input type="hidden" name="status" value="{{ s }}">
+          <button class="btn {% if s == 'completed' %}btn-ok{% elif forloop.first %}btn-primary{% endif %}">Mark {{ label|lower }}</button></form>
+      {% endfor %}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Payments</h2><span class="num"><strong>{{ order.paid_amount|inr }}</strong> <span class="muted">of {{ order.total|inr }}</span></span></div>
+      <div class="table-wrap"><table class="table compact">
+        <tbody>{% for p in order.payments.all %}
+          <tr><td>{{ p.get_method_display }}{% if p.amount < 0 %} <span class="pill pill-unpaid">refund</span>{% endif %}
+            <div class="small muted">{{ p.created_at|date:"d M, h:i A" }} · {{ p.received_by }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.note %} · {{ p.note }}{% endif %}</div></td>
+            <td class="r num">{{ p.amount|inr }}{% if p.cash_tendered %}<div class="small muted">given {{ p.cash_tendered|inr }}</div>{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">No payment yet.</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% if order.status != "cancelled" and order.balance > 0 %}
+      <form method="post" action="/orders/{{ order.pk }}/pay/" class="card-foot form" x-data="{ m: 'cash' }">
+        {% csrf_token %}
+        <div class="seg full">{% for v, l in methods %}<button type="button" :aria-pressed="m === '{{ v }}'" @click="m = '{{ v }}'">{{ l }}</button>{% endfor %}</div>
+        <input type="hidden" name="method" :value="m">
+        <div class="form-grid two">
+          <div class="field"><label>Amount</label><div class="input-money"><input type="number" name="amount" step="0.01" min="0.01" value="{{ order.balance|stringformat:'s' }}" inputmode="decimal" required></div></div>
+          <div class="field" x-show="m === 'cash'"><label>Cash given (optional)</label><div class="input-money"><input type="number" name="cash_tendered" step="1" min="0" inputmode="decimal"></div></div>
+          <div class="field" x-show="m !== 'cash'"><label>Reference (optional)</label><input type="text" name="reference" maxlength="60"></div>
+        </div>
+        <button class="btn btn-ok btn-lg">{% icon 'check' %} Record payment</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if order.status != "cancelled" %}
+    <div class="card card-pad stack">
+      {% if user.is_owner %}
+        <details class="disclosure"><summary class="spread"><span>Cancel this bill</span>{% icon 'right' 'sm' %}</summary>
+          <form method="post" action="/orders/{{ order.pk }}/cancel/" class="form mt-s" data-confirm="Cancel this bill? Stock goes back and any payment is refunded.">{% csrf_token %}
+            <input type="text" name="reason" placeholder="Reason (required)" required maxlength="200">
+            <button class="btn btn-danger">Cancel bill</button></form></details>
+        {% if order.paid_amount > 0 %}
+        <details class="disclosure"><summary class="spread"><span>Give a refund</span>{% icon 'right' 'sm' %}</summary>
+          <form method="post" action="/orders/{{ order.pk }}/refund/" class="form mt-s">{% csrf_token %}
+            <div class="form-grid two"><select name="method">{% for v, l in methods %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+              <div class="input-money"><input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount" required></div></div>
+            <input type="text" name="note" placeholder="Why?" maxlength="100">
+            <button class="btn btn-danger">Record refund</button></form></details>
+        {% endif %}
+      {% else %}
+        <details class="disclosure"><summary class="spread"><span>Ask owner to cancel</span>{% icon 'right' 'sm' %}</summary>
+          <form method="post" action="/orders/{{ order.pk }}/request/" class="form mt-s">{% csrf_token %}<input type="hidden" name="kind" value="cancel">
+            <input type="text" name="reason" placeholder="Why cancel? (required)" required maxlength="200">
+            <button class="btn btn-danger">Send request</button></form></details>
+        <details class="disclosure"><summary class="spread"><span>Ask owner for a discount</span>{% icon 'right' 'sm' %}</summary>
+          <form method="post" action="/orders/{{ order.pk }}/request/" class="form mt-s">{% csrf_token %}<input type="hidden" name="kind" value="discount">
+            <div class="input-money"><input type="number" name="discount_amount" step="1" min="1" placeholder="Discount amount" required></div>
+            <input type="text" name="reason" placeholder="Reason (required)" required maxlength="200">
+            <button class="btn">Send request</button></form></details>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if approvals %}
+    <div class="card">
+      <div class="card-head"><h2>Requests</h2></div>
+      <div class="table-wrap"><table class="table compact"><tbody>{% for a in approvals %}
+        <tr><td><strong>{{ a.get_kind_display }}</strong>{% if a.discount_amount %} {{ a.discount_amount|inr }}{% endif %}
+          <div class="small muted">{{ a.requested_by }}: “{{ a.reason }}”</div>
+          {% if a.decided_by %}<div class="small muted">{{ a.get_status_display }} by {{ a.decided_by }} {% if a.decision_note %}— {{ a.decision_note }}{% endif %}</div>{% endif %}</td>
+          <td class="r">{% if a.status == "pending" and user.is_owner %}
+            <form method="post" action="/approvals/{{ a.pk }}/decide/" class="row" style="justify-content:flex-end">{% csrf_token %}<input type="hidden" name="next" value="/orders/{{ order.pk }}/">
+              <button class="btn btn-sm btn-ok" name="decision" value="approve">Approve</button><button class="btn btn-sm btn-danger" name="decision" value="reject">Reject</button></form>
+          {% else %}<span class="pill {% if a.status == 'approved' %}pill-paid{% elif a.status == 'rejected' %}pill-unpaid{% else %}pill-pending{% endif %}">{{ a.get_status_display }}</span>{% endif %}</td></tr>
+      {% endfor %}</tbody></table></div>
+    </div>
+    {% endif %}
+
+    {% if history %}
+    <details class="card card-pad disclosure"><summary class="spread"><h3>Change history</h3><span class="small muted">{{ history|length }} entries</span></summary>
+      <div class="mt-s small">{% for h in history %}
+        <div style="padding:6px 0;border-bottom:1px dashed var(--line)"><strong>{{ h.action }}</strong> · {{ h.actor|default:"system" }} · <span class="muted">{{ h.created_at|date:"d M h:i A" }}</span>
+          {% for k, v in h.changes.items %}<div class="muted">{{ k }}: {{ v.0|default_if_none:"—" }} → {{ v.1|default_if_none:"—" }}</div>{% endfor %}</div>
+      {% endfor %}</div>
+    </details>
+    {% endif %}
+  </div>
+</div>

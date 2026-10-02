@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Audit log{% endblock %}
+{% block topbar_title %}Audit log{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Audit log</h1><div class="sub">Every change, who made it, when, and from which device. Nobody can edit this.</div></div></div>
+<form class="card card-pad toolbar mb" method="get">
+  <select name="model" style="width:auto"><option value="">All things</option>{% for m in models %}<option {% if f.model == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+  <select name="action" style="width:auto"><option value="">All actions</option>{% for a in actions %}<option {% if f.action == a %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
+  <select name="user" style="width:auto"><option value="">Everyone</option>{% for u in users %}<option value="{{ u.pk }}" {% if f.user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>{% endfor %}</select>
+  <input type="date" name="date" value="{{ f.date }}" style="width:auto">
+  <input type="search" name="q" value="{{ f.q }}" placeholder="Bill no / item…" style="width:180px">
+  <button class="btn btn-primary">Filter</button><a class="btn btn-ghost" href="/audit/">Reset</a>
+</form>
+<div class="card"><div class="table-wrap"><table class="table compact">
+  <thead><tr><th>When</th><th>Who</th><th>Action</th><th>What</th><th>Changes</th><th>Device</th></tr></thead>
+  <tbody>{% for a in page %}
+    <tr><td class="nowrap small">{{ a.created_at|date:"d M, h:i:s A" }}</td><td>{{ a.actor|default:"—" }}</td>
+      <td><span class="pill {% if a.action == 'delete' or a.action == 'login failed' %}pill-unpaid{% elif a.action == 'create' %}pill-paid{% endif %}">{{ a.action }}</span></td>
+      <td><span class="muted small">{{ a.model }}</span><br>{{ a.object_repr }}</td>
+      <td class="small" style="max-width:420px">{% for k, v in a.changes.items %}<div><strong>{{ k }}</strong>: <span class="muted">{{ v.0|default_if_none:"—" }}</span> → {{ v.1|default_if_none:"—" }}</div>{% endfor %}{% if a.note %}<div class="muted">{{ a.note }}</div>{% endif %}</td>
+      <td class="small muted">{{ a.device|default:"" }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="muted">Nothing found.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pager.html" %}
+{% endblock %}

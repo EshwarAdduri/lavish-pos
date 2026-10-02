@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/stock/">← Stock</a><h1>{{ title }}</h1><div class="sub">{{ help_text }}</div></div></div>
+<form method="post" class="card card-pad form" style="max-width:520px">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-bad">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <div class="field"><label>Item</label>{{ form.stock_item }}{{ form.stock_item.errors }}</div>
+  <div class="field"><label>Quantity <span class="muted small">(kg for chicken, pieces for rotis)</span></label>{{ form.quantity }}{{ form.quantity.errors }}</div>
+  {% if kind == "purchase" %}
+    <div class="form-grid two">
+      <div class="field"><label>{{ form.total_cost.label }}</label><div class="input-money">{{ form.total_cost }}</div>{{ form.total_cost.errors }}<div class="help">Leave empty if already paid / no cost.</div></div>
+      <div class="field"><label>Paid from</label>{{ form.paid_from }}</div>
+    </div>
+  {% endif %}
+  {% if kind == "adjust" %}<div class="field"><label>Direction</label>{{ form.direction }}</div>{% endif %}
+  <div class="form-grid two">
+    <div class="field"><label>Date</label>{{ form.business_date }}{{ form.business_date.errors }}</div>
+    <div class="field"><label>Note (optional)</label>{{ form.note }}</div>
+  </div>
+  <div class="row"><button class="btn btn-primary btn-lg">Save</button><a class="btn btn-lg btn-ghost" href="/stock/">Cancel</a></div>
+</form>
+{% endblock %}

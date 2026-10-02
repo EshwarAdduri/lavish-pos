@@ -1,0 +1,132 @@
+{% load static lavish %}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}{{ shop.shop_name }}{% endblock %} · {{ shop.shop_name }}</title>
+  <meta name="theme-color" content="#E8590C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{ shop.shop_name }}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="{% static 'icons/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <script>
+    // Apply saved theme before the page paints (no white flash in dark mode).
+    (function () {
+      try {
+        var t = localStorage.getItem("ls-theme");
+        if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script defer src="{% static 'vendor/htmx.min.js' %}"></script>
+  {% block head %}{% endblock %}
+  <script defer src="{% static 'js/app.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
+</head>
+<body class="app" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      data-owner="{% if user.is_owner %}1{% endif %}">
+{% include "partials/icons.html" %}
+{% with owner=user.is_owner %}
+
+<aside class="sidebar">
+  <a class="brand" href="/pos/">
+    <span class="brand-mark">LS</span>
+    <span class="brand-name">{{ shop.shop_name }}<small>Billing &amp; money</small></span>
+  </a>
+  <a class="nav-link {% active 'pos' %}" href="/pos/">{% icon 'pos' %} Billing</a>
+  <a class="nav-link {% active 'orders' 'order_detail' %}" href="/orders/">{% icon 'orders' %} Orders</a>
+  <a class="nav-link {% active 'board' %}" href="/orders/board/">{% icon 'board' %} Kitchen board</a>
+  <div class="nav-group">Money &amp; stock</div>
+  {% if owner %}<a class="nav-link {% active 'dashboard' %}" href="/money/">{% icon 'money' %} Money dashboard</a>{% endif %}
+  {% if owner or shop.staff_can_record %}
+    <a class="nav-link {% active 'day_close' %}" href="/money/close/">{% icon 'lock' %} Day close</a>
+    {% if owner %}<a class="nav-link {% active 'closings' 'closing_report' %}" href="/money/closings/">{% icon 'history' %} Closing history</a>{% endif %}
+    <a class="nav-link {% active 'expenses' 'expense_new' 'expense_edit' %}" href="/money/expenses/">{% icon 'cash' %} Expenses</a>
+  {% endif %}
+  <a class="nav-link {% active 'stock' 'stock_record' 'stock_history' %}" href="/stock/">{% icon 'stock' %} Chicken &amp; stock</a>
+  <a class="nav-link {% active 'prep_plan' %}" href="/stock/prep/">{% icon 'flame' %} Prep plan</a>
+  {% if owner %}
+    <a class="nav-link {% active 'reports' %}" href="/money/reports/">{% icon 'chart' %} Reports</a>
+    <div class="nav-group">Owner</div>
+    <a class="nav-link {% active 'approvals' %}" href="/approvals/">{% icon 'approve' %} Approvals
+      <span class="count" id="approval-count" {% if not pending_approvals %}hidden{% endif %}>{{ pending_approvals }}</span></a>
+    <a class="nav-link {% active 'menu' 'item_edit' 'item_new' 'category_edit' 'category_new' 'addon_edit' 'addon_new' %}" href="/menu/">{% icon 'menu' %} Menu &amp; prices</a>
+    <a class="nav-link {% active 'team' 'user_edit' 'user_new' 'device_edit' %}" href="/team/">{% icon 'users' %} Staff &amp; devices</a>
+    <a class="nav-link {% active 'settings' %}" href="/settings/">{% icon 'settings' %} Settings</a>
+    <a class="nav-link {% active 'audit' %}" href="/audit/">{% icon 'history' %} Audit log</a>
+  {% endif %}
+  <div class="sidebar-foot">
+    <div class="who"><span class="avatar">{{ user.username|first|upper }}</span>
+      <div><strong>{{ user }}</strong><div class="small muted">{% if owner %}Owner{% else %}Staff{% endif %}</div></div></div>
+    <button class="nav-link btn-ghost" type="button" data-theme-toggle style="border:0;background:none;font:inherit;cursor:pointer;width:100%">{% icon 'moon' %} <span>Dark / light</span></button>
+    <a class="nav-link" href="/account/password/">{% icon 'key' %} Change password</a>
+    <form method="post" action="/logout/">{% csrf_token %}<button class="nav-link" style="border:0;background:none;font:inherit;cursor:pointer;width:100%">{% icon 'logout' %} Log out</button></form>
+  </div>
+</aside>
+
+<div class="app-body">
+  <header class="topbar">
+    <a class="brand" href="/pos/"><span class="brand-mark">LS</span></a>
+    <span class="topbar-title">{% block topbar_title %}{{ shop.shop_name }}{% endblock %}</span>
+    <div class="topbar-actions">
+      {% block topbar_actions %}{% endblock %}
+      <button class="btn btn-ghost btn-icon" type="button" data-theme-toggle aria-label="Dark or light mode">{% icon 'moon' %}</button>
+    </div>
+  </header>
+
+  <main class="main {% block main_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="tabbar" x-data="{ more: false }">
+    <a class="tab {% active 'pos' %}" href="/pos/">{% icon 'pos' %}Billing</a>
+    <a class="tab {% active 'orders' 'order_detail' %}" href="/orders/">{% icon 'orders' %}Orders</a>
+    <a class="tab {% active 'board' %}" href="/orders/board/">{% icon 'board' %}Kitchen</a>
+    {% if owner %}
+      <a class="tab {% active 'dashboard' %}" href="/money/">{% icon 'money' %}Money</a>
+    {% else %}
+      <a class="tab {% active 'stock' %}" href="/stock/">{% icon 'stock' %}Stock</a>
+    {% endif %}
+    <button class="tab" type="button" @click="more = true">{% icon 'more' %}More
+      {% if pending_approvals %}<span class="dot"></span>{% endif %}</button>
+
+    <template x-if="more">
+      <div>
+        <div class="sheet-backdrop" @click="more = false"></div>
+        <div class="sheet" @keydown.escape.window="more = false">
+          <div class="sheet-handle"></div>
+          <div class="who"><span class="avatar">{{ user.username|first|upper }}</span><div><strong>{{ user }}</strong><div class="small muted">{% if owner %}Owner{% else %}Staff{% endif %}</div></div></div>
+          {% if owner or shop.staff_can_record %}
+            <a class="nav-link" href="/money/close/">{% icon 'lock' %} Day close</a>
+            <a class="nav-link" href="/money/expenses/">{% icon 'cash' %} Expenses</a>
+          {% endif %}
+          <a class="nav-link" href="/stock/">{% icon 'stock' %} Chicken &amp; stock</a>
+          <a class="nav-link" href="/stock/prep/">{% icon 'flame' %} Prep plan</a>
+          {% if owner %}
+            <a class="nav-link" href="/money/reports/">{% icon 'chart' %} Reports</a>
+            <a class="nav-link" href="/money/closings/">{% icon 'history' %} Closing history</a>
+            <a class="nav-link" href="/approvals/">{% icon 'approve' %} Approvals {% if pending_approvals %}<span class="count">{{ pending_approvals }}</span>{% endif %}</a>
+            <a class="nav-link" href="/menu/">{% icon 'menu' %} Menu &amp; prices</a>
+            <a class="nav-link" href="/team/">{% icon 'users' %} Staff &amp; devices</a>
+            <a class="nav-link" href="/settings/">{% icon 'settings' %} Settings</a>
+            <a class="nav-link" href="/audit/">{% icon 'history' %} Audit log</a>
+          {% endif %}
+          <a class="nav-link" href="/account/password/">{% icon 'key' %} Change password</a>
+          <form method="post" action="/logout/">{% csrf_token %}<button class="nav-link" style="border:0;background:none;font:inherit;width:100%;cursor:pointer">{% icon 'logout' %} Log out</button></form>
+        </div>
+      </div>
+    </template>
+  </nav>
+</div>
+{% endwith %}
+
+<div id="toasts" aria-live="polite">
+  {% for m in messages %}<div class="toast toast-{{ m.tags }}" data-autohide>{{ m }}</div>{% endfor %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

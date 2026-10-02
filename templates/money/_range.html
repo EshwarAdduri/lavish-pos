@@ -1,0 +1,9 @@
+<form class="toolbar" method="get">
+  <div class="seg">
+    {% for v, l in ranges %}<a class="{% if preset == v %}on{% endif %}" href="?range={{ v }}{% if category %}&category={{ category }}{% endif %}">{{ l }}</a>{% endfor %}
+  </div>
+  <input type="hidden" name="range" value="custom">
+  <input type="date" name="start" value="{{ start|date:'Y-m-d' }}" style="width:auto">
+  <input type="date" name="end" value="{{ end|date:'Y-m-d' }}" style="width:auto">
+  <button class="btn">Show</button>
+</form>

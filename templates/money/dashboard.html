@@ -1,0 +1,55 @@
+{% extends "base.html" %}{% load static lavish %}
+{% block title %}Money{% endblock %}
+{% block topbar_title %}Money{% endblock %}
+{% block head %}<script defer src="{% static 'vendor/chart.min.js' %}"></script><script defer src="{% static 'js/charts.js' %}"></script>{% endblock %}
+{% block content %}
+{{ chart|json_script:"chart-data" }}
+<div class="page-head">
+  <div><h1>Money today</h1><div class="sub">{{ s.day|date:"l, d M Y" }} · refresh for latest</div></div>
+  <div class="toolbar"><a class="btn" href="/money/expenses/new/">{% icon 'plus' %} Expense</a><a class="btn btn-primary" href="/money/close/">{% icon 'lock' %} Close day</a></div>
+</div>
+
+<div class="stack" style="gap:10px;margin-bottom:16px">
+  {% if close_reminder %}<div class="alert alert-warn">{% icon 'alert' %}<div>Yesterday isn't closed yet. <a href="/money/close/?date={{ y.day|date:'Y-m-d' }}">Count cash &amp; stock for {{ y.day|date:"d M" }}</a></div></div>{% endif %}
+  {% if pending_approvals %}<div class="alert alert-info">{% icon 'approve' %}<div>{{ pending_approvals }} staff request{{ pending_approvals|pluralize }} waiting. <a href="/approvals/">Review</a></div></div>{% endif %}
+  {% if low %}<div class="alert alert-warn">{% icon 'stock' %}<div><strong>Running low:</strong> {% for r in low %}{{ r.item.name }} ({{ r.closing|qty:r.item.unit }}){% if not forloop.last %}, {% endif %}{% endfor %}. <a href="/stock/record/purchase/">Record purchase</a></div></div>{% endif %}
+  {% if unverified %}<div class="alert alert-warn">{% icon 'alert' %}<div>Set your real chicken/roti amounts per item in <a href="/stock/recipes/">Recipes</a> so missing-stock numbers are accurate.</div></div>{% endif %}
+</div>
+
+<div class="kpis six">
+  <div class="kpi hero"><div class="label">Sales today</div><div class="value">{{ s.sales|inr }}</div>
+    <div class="hint">{{ s.orders_count }} bills{% if y.sales %} · yesterday {{ y.sales|inr }}{% endif %}</div></div>
+  <div class="kpi"><div class="label">{% icon 'cash' 'sm' %} Cash</div><div class="value">{{ s.by_method.cash|inr }}</div><div class="hint">drawer should have {{ s.expected_cash|inr }}</div></div>
+  <div class="kpi"><div class="label">{% icon 'upi' 'sm' %} UPI</div><div class="value">{{ s.by_method.upi|inr }}</div></div>
+  <div class="kpi"><div class="label">{% icon 'card' 'sm' %} Card / online</div><div class="value">{{ s.by_method.card|inr }}</div><div class="hint">online {{ s.by_method.online|inr }}</div></div>
+  <div class="kpi"><div class="label">Unpaid bills</div><div class="value {% if s.unpaid %}down{% endif %}">{{ s.unpaid|inr }}</div><div class="hint"><a href="/orders/?paid=unpaid">see them</a></div></div>
+  <div class="kpi"><div class="label">Expenses</div><div class="value">{{ s.expenses|inr }}</div><div class="hint">sales − expenses {{ s.profit_estimate|inr }}</div></div>
+</div>
+
+{% if stock_rows %}
+<div class="card mt">
+  <div class="card-head"><h2>Chicken &amp; key stock today</h2><a class="btn btn-sm btn-ghost" href="/stock/">Details {% icon 'right' 'sm' %}</a></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="r">Opening</th><th class="r">Bought</th><th class="r">Used in bills</th><th class="r">Should have now</th></tr></thead>
+    <tbody>{% for r in stock_rows %}<tr><td><strong>{{ r.item.name }}</strong>{% if r.is_low %} <span class="pill pill-warn">Low</span>{% endif %}</td>
+      <td class="r num">{{ r.opening|qty:r.item.unit }}</td><td class="r num">{{ r.purchased|qty }}</td><td class="r num">{{ r.used|qty:r.item.unit }}</td><td class="r num"><strong>{{ r.expected|qty:r.item.unit }}</strong></td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="grid-2 mt">
+  <div class="card"><div class="card-head"><h2>Last 14 days</h2><span class="muted small">{{ p.sales|inr }} · {{ p.orders }} bills</span></div><div class="card-body"><div class="chart-box"><canvas id="ch-daily"></canvas></div></div></div>
+  <div class="card"><div class="card-head"><h2>Busiest hours (14 days)</h2></div><div class="card-body"><div class="chart-box"><canvas id="ch-hour"></canvas></div></div></div>
+</div>
+
+<div class="grid-2 mt" style="align-items:start">
+  <div class="card"><div class="card-head"><h2>Top items (14 days)</h2><a class="btn btn-sm btn-ghost" href="/money/reports/">Reports {% icon 'right' 'sm' %}</a></div>
+    <div class="table-wrap"><table class="table compact"><tbody>{% for r in p.top_items|slice:":8" %}
+      <tr><td>{{ r.item_name }}{% if r.variant_name != "Regular" %} <span class="muted">({{ r.variant_name }})</span>{% endif %}</td><td class="r num">{{ r.qty }}</td><td class="r num">{{ r.amount|inr }}</td></tr>
+    {% empty %}<tr><td class="muted">No sales yet.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><div class="card-head"><h2>Latest payments</h2><a class="btn btn-sm btn-ghost" href="/orders/">Orders {% icon 'right' 'sm' %}</a></div>
+    <div class="table-wrap"><table class="table compact"><tbody>{% for x in recent_payments %}
+      <tr><td><a href="/orders/{{ x.order.pk }}/">#{{ x.order.token_no }}</a> <span class="small muted">{{ x.created_at|time:"h:i A" }} · {{ x.received_by }}</span></td><td>{{ x.get_method_display }}</td><td class="r num">{{ x.amount|inr }}</td></tr>
+    {% empty %}<tr><td class="muted">No payments yet today.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}

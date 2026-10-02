@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Expenses{% endblock %}
+{% block topbar_title %}Expenses{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Expenses</h1><div class="sub">Money going out · {{ start|date:"d M" }} – {{ end|date:"d M Y" }} · total <strong>{{ total|inr }}</strong></div></div>
+  <a class="btn btn-primary" href="/money/expenses/new/">{% icon 'plus' %} Add expense</a>
+</div>
+<div class="mb">{% include "money/_range.html" %}</div>
+<form class="toolbar mb" method="get"><input type="hidden" name="range" value="{{ preset }}"><input type="hidden" name="start" value="{{ start|date:'Y-m-d' }}"><input type="hidden" name="end" value="{{ end|date:'Y-m-d' }}">
+  <select name="category" onchange="this.form.submit()" style="width:auto"><option value="">All types</option>{% for v, l in categories %}<option value="{{ v }}" {% if category == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
+<div class="card"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Paid from</th><th class="r">Amount</th><th>By</th><th></th></tr></thead>
+  <tbody>{% for e in page %}
+    <tr><td class="nowrap">{{ e.business_date|date:"d M" }}</td><td><span class="pill">{{ e.get_category_display }}</span></td><td>{{ e.description }}</td>
+      <td class="small">{{ e.get_paid_from_display }}</td><td class="r num"><strong>{{ e.amount|inr }}</strong></td><td class="small muted">{{ e.created_by }}</td>
+      <td class="r">{% if user.is_owner %}<a class="btn btn-sm btn-ghost" href="/money/expenses/{{ e.pk }}/">{% icon 'edit' 'sm' %}</a>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7"><div class="empty">No expenses in this period.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pager.html" %}
+{% endblock %}

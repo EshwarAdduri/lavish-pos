@@ -1,0 +1,25 @@
+{% if form.non_field_errors %}<div class="alert alert-bad">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+{% for f in form.hidden_fields %}{{ f }}{% endfor %}
+{% for f in form.visible_fields %}
+  {% if f.widget_type == "checkbox" %}
+    <div class="field">
+      <label class="check">{{ f }} {{ f.label }}</label>
+      {% if f.help_text %}<div class="help">{{ f.help_text|safe }}</div>{% endif %}
+      {% if f.errors %}<ul class="errors">{% for e in f.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+  {% elif f.widget_type == "checkboxselectmultiple" %}
+    <div class="field">
+      <span class="label">{{ f.label }}</span>
+      <div class="check-list">{% for c in f %}<label>{{ c.tag }} {{ c.choice_label }}</label>{% endfor %}</div>
+      {% if f.help_text %}<div class="help">{{ f.help_text|safe }}</div>{% endif %}
+      {% if f.errors %}<ul class="errors">{% for e in f.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+  {% else %}
+    <div class="field">
+      <label for="{{ f.id_for_label }}">{{ f.label }}{% if f.field.required %} <span class="muted">*</span>{% endif %}</label>
+      {{ f }}
+      {% if f.help_text %}<div class="help">{{ f.help_text|safe }}</div>{% endif %}
+      {% if f.errors %}<ul class="errors">{% for e in f.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+  {% endif %}
+{% endfor %}

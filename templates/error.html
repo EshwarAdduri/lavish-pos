@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="empty" style="padding-top:80px">{% icon 'alert' 'lg' %}<h1>{{ title }}</h1><p>{{ text }}</p><a class="btn btn-primary" href="/">Go to billing</a></div>
+{% endblock %}

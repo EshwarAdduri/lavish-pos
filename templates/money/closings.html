@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Day closings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Day closings</h1><div class="sub">Every day's cash and stock check.</div></div><a class="btn btn-primary" href="/money/close/">{% icon 'lock' %} Close today</a></div>
+<div class="card"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Date</th><th class="r">Sales</th><th class="r">Cash</th><th class="r">UPI</th><th class="r">Expenses</th><th class="r">Cash difference</th><th class="r">Stock missing</th><th>By</th></tr></thead>
+  <tbody>{% for c in page %}
+    <tr class="row-link" onclick="location='/money/closings/{{ c.business_date|date:'Y-m-d' }}/'"><td><a href="/money/closings/{{ c.business_date|date:'Y-m-d' }}/">{{ c.business_date|date:"D d M Y" }}</a></td>
+      <td class="r num">{{ c.total_sales|inr }}</td><td class="r num">{{ c.cash_sales|inr }}</td><td class="r num">{{ c.upi_sales|inr }}</td><td class="r num">{{ c.total_expenses|inr }}</td>
+      <td class="r num {% if c.cash_difference < 0 %}var-neg{% elif c.cash_difference > 0 %}var-pos{% else %}var-zero{% endif %}">{{ c.cash_difference|inr }}</td>
+      <td class="r num {% if c.stock_loss_value %}var-neg{% endif %}">{{ c.stock_loss_value|inr }}</td><td class="small muted">{{ c.closed_by }}</td></tr>
+  {% empty %}<tr><td colspan="8"><div class="empty">No days closed yet.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pager.html" %}
+{% endblock %}

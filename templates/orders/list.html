@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Orders{% endblock %}
+{% block topbar_title %}Orders{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Orders</h1><div class="sub">{% if is_today %}Today ({{ day|date:"D d M" }}){% else %}{{ day|date:"l, d M Y" }}{% endif %} · updates live</div></div>
+  <div class="toolbar">
+    <a class="btn btn-icon" href="?date={{ prev_day|date:'Y-m-d' }}" aria-label="Previous day">{% icon 'left' %}</a>
+    <form method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" onchange="this.form.submit()" style="width:auto"></form>
+    {% if not is_today %}<a class="btn btn-icon" href="?date={{ next_day|date:'Y-m-d' }}" aria-label="Next day">{% icon 'right' %}</a><a class="btn" href="/orders/">Today</a>{% endif %}
+  </div>
+</div>
+<form class="toolbar mb" method="get">
+  <input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+  <div class="seg">
+    <a class="{% if not status and not paid %}on{% endif %}" href="?date={{ day|date:'Y-m-d' }}">All</a>
+    <a class="{% if paid == 'unpaid' %}on{% endif %}" href="?date={{ day|date:'Y-m-d' }}&paid=unpaid">Unpaid</a>
+    {% for v, l in statuses %}<a class="{% if status == v %}on{% endif %}" href="?date={{ day|date:'Y-m-d' }}&status={{ v }}">{{ l }}</a>{% endfor %}
+  </div>
+  <div class="search" style="flex:1;min-width:200px">{% icon 'search' %}<input type="search" name="q" value="{{ q }}" placeholder="Bill no, token, customer…"></div>
+</form>
+<div id="order-rows" hx-get="{{ request.get_full_path }}" hx-trigger="orders-changed from:body" hx-swap="innerHTML">
+  {% include "orders/_list_rows.html" %}
+</div>
+{% endblock %}

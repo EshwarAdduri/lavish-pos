@@ -1,0 +1,30 @@
+{% load lavish %}
+<div class="board">
+{% for s, label, orders in cols %}
+  <section class="board-col">
+    <h2><span>{{ label }}</span><span class="pill pill-{{ s }}">{{ orders|length }}</span></h2>
+    {% for o in orders %}
+      <article class="ticket">
+        <div class="tk-head"><a class="tk-token" href="/orders/{{ o.pk }}/" style="color:inherit">#{{ o.token_no }}</a>
+          <span class="age {% if o.age_minutes >= 15 %}late{% endif %}">{{ o.created_at|time:"h:i A" }} · {{ o.age_minutes }} min</span></div>
+        <div class="row" style="gap:6px"><span class="pill">{{ o.get_order_type_display }}{% if o.platform %} · {{ o.get_platform_display }}{% endif %}</span>
+          {% if o.is_paid %}<span class="pill pill-paid">Paid</span>{% else %}<span class="pill pill-unpaid">{{ o.balance|inr }} due</span>{% endif %}
+          {% if o.customer_name %}<span class="small muted">{{ o.customer_name }}</span>{% endif %}</div>
+        <ul>{% for i in o.items.all %}<li><strong>{{ i.quantity }}×</strong> {{ i.display_name }}{% for a in i.addons.all %} <span class="muted">+{{ a.name }}</span>{% endfor %}{% if i.note %} <em class="muted">({{ i.note }})</em>{% endif %}</li>{% endfor %}</ul>
+        {% if o.note %}<div class="small"><strong>Note:</strong> {{ o.note }}</div>{% endif %}
+        <div class="row" style="gap:6px">
+          {% if s == "pending" %}
+            <button class="btn btn-sm btn-primary" hx-post="/orders/{{ o.pk }}/status/" hx-vals='{"status":"preparing"}' hx-target="#board">Start preparing</button>
+            <button class="btn btn-sm" hx-post="/orders/{{ o.pk }}/status/" hx-vals='{"status":"ready"}' hx-target="#board">Ready</button>
+          {% elif s == "preparing" %}
+            <button class="btn btn-sm btn-primary" hx-post="/orders/{{ o.pk }}/status/" hx-vals='{"status":"ready"}' hx-target="#board">Mark ready</button>
+          {% else %}
+            {% if o.is_paid %}<button class="btn btn-sm btn-ok" hx-post="/orders/{{ o.pk }}/status/" hx-vals='{"status":"completed"}' hx-target="#board">{% icon 'check' 'sm' %} Handed over</button>
+            {% else %}<a class="btn btn-sm btn-primary" href="/orders/{{ o.pk }}/">Take payment</a>{% endif %}
+          {% endif %}
+        </div>
+      </article>
+    {% empty %}<div class="empty small">Nothing here</div>{% endfor %}
+  </section>
+{% endfor %}
+</div>

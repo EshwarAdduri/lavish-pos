@@ -1,0 +1,7 @@
+<form method="post" action="/menu/items/{{ item.pk }}/toggle/{{ field }}/" hx-post="/menu/items/{{ item.pk }}/toggle/{{ field }}/" hx-swap="outerHTML" style="display:inline">{% csrf_token %}
+{% if field == "is_active" %}
+  <button class="btn btn-sm {% if item.is_active %}btn-soft{% endif %}" title="Show / hide on menu">{% if item.is_active %}Yes{% else %}No{% endif %}</button>
+{% else %}
+  <button class="btn btn-sm {% if item.is_sold_out %}btn-danger{% endif %}" title="Sold out today">{% if item.is_sold_out %}Sold out{% else %}Available{% endif %}</button>
+{% endif %}
+</form>

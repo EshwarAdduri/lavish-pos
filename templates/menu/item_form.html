@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}{% if obj %}Edit {{ obj.name }}{% else %}New item{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/menu/">← Menu</a><h1>{% if obj %}{{ obj.name }}{% else %}New menu item{% endif %}</h1></div></div>
+<form method="post" class="form" style="max-width:760px">
+  {% csrf_token %}
+  <div class="card card-pad form">{% include "partials/form_fields.html" %}</div>
+  <div class="card">
+    <div class="card-head"><h2>Sizes &amp; prices</h2><span class="small muted">Only one size? Call it “Regular”.</span></div>
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}<div class="alert alert-bad" style="margin:12px">{{ formset.non_form_errors|join:" " }}</div>{% endif %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Size name</th><th>Price (₹)</th><th>Order</th><th class="center">On</th><th class="center">Remove</th></tr></thead>
+      <tbody>{% for f in formset %}
+        <tr>{% for h in f.hidden_fields %}{{ h }}{% endfor %}
+          <td>{{ f.name }}{{ f.name.errors }}</td><td>{{ f.price }}{{ f.price.errors }}</td>
+          <td style="width:90px">{{ f.sort_order }}</td><td class="center">{{ f.is_active }}</td>
+          <td class="center">{% if f.instance.pk %}{{ f.DELETE }}{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <div class="card-foot small muted">Save to get another empty row for one more size.</div>
+  </div>
+  <div class="spread">
+    <div class="row"><button class="btn btn-primary btn-lg">Save item</button><a class="btn btn-lg btn-ghost" href="/menu/">Cancel</a></div>
+    {% if obj %}<button class="btn btn-danger" name="delete" value="1" formnovalidate onclick="return confirm('Delete {{ obj.name|escapejs }}? Old bills are not affected. Tip: untick “Is active” to just hide it.')">{% icon 'trash' 'sm' %} Delete</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

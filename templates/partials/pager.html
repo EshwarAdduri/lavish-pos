@@ -1,0 +1,6 @@
+{% load lavish %}
+{% if page.has_other_pages %}<div class="pager">
+  {% if page.has_previous %}<a class="btn btn-sm" href="{% qs page=page.previous_page_number %}">{% icon 'left' 'sm' %} Newer</a>{% endif %}
+  <span class="muted small">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="{% qs page=page.next_page_number %}">Older {% icon 'right' 'sm' %}</a>{% endif %}
+</div>{% endif %}

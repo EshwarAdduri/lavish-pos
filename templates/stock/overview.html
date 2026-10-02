@@ -1,0 +1,73 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Chicken & stock{% endblock %}
+{% block topbar_title %}Chicken & stock{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Chicken &amp; stock</h1><div class="sub">{% if is_today %}Today{% else %}{{ day|date:"l" }}{% endif %}, {{ day|date:"d M Y" }} — what came in, what bills used, what's left.</div></div>
+  <div class="toolbar">
+    <a class="btn btn-icon" href="?date={{ prev_day|date:'Y-m-d' }}" aria-label="Previous day">{% icon 'left' %}</a>
+    <form method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" onchange="this.form.submit()" style="width:auto"></form>
+    {% if not is_today %}<a class="btn btn-icon" href="?date={{ next_day|date:'Y-m-d' }}" aria-label="Next day">{% icon 'right' %}</a>{% endif %}
+  </div>
+</div>
+
+{% if user.is_owner and unverified %}
+<div class="alert alert-warn mb">{% icon 'alert' %}<div><strong>{{ unverified }} recipe amounts are still my starting guesses</strong> (for example 120 g raw chicken per shawarma).
+  Set your real amounts in <a href="/stock/recipes/">Recipes</a>, or the "missing" numbers won't be accurate.</div></div>
+{% endif %}
+
+{% if not_started %}
+<div class="alert alert-info mb">{% icon 'alert' %}<div><strong>Getting started:</strong> tracking begins once you enter what you have.
+  Either record today's purchases with <strong>Bought stock</strong>, or count everything at <strong>Day close</strong> — from the next day the app checks for missing stock automatically.
+  <div class="small">Not started yet: {{ not_started|join:", " }}</div></div></div>
+{% endif %}
+{% if user.is_owner or shop.staff_can_record %}
+<div class="grid mb" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px">
+  <a class="btn btn-primary btn-lg" href="/stock/record/purchase/">{% icon 'plus' %} Bought stock</a>
+  <a class="btn btn-lg" href="/stock/record/wastage/">{% icon 'trash' %} Wastage</a>
+  <a class="btn btn-lg" href="/stock/record/staff_meal/">{% icon 'menu' %} Staff meal</a>
+  <a class="btn btn-lg" href="/money/close/?date={{ day|date:'Y-m-d' }}">{% icon 'lock' %} Count &amp; close day</a>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><h2>Stock for the day</h2>{% if loss %}<span class="pill pill-unpaid">{% icon 'loss' 'sm' %} Missing value {{ loss|neg|inr }}</span>{% endif %}</div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="r">Opening</th><th class="r">+ Bought</th><th class="r">− Used in bills</th><th class="r">− Wasted / staff</th><th class="r">= Should have</th><th class="r">Counted</th><th class="r">Difference</th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr><td><strong>{{ r.item.name }}</strong>{% if r.is_low %} <span class="pill pill-warn">Low</span>{% endif %}<div class="small muted">{{ r.item.cost_per_unit|inr }}/{{ r.item.unit }}</div></td>
+        <td class="r num">{{ r.opening|qty:r.item.unit }}</td>
+        <td class="r num">{% if r.purchased %}{{ r.purchased|qty }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="r num">{% if r.used %}{{ r.used|qty }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="r num">{% if r.wasted_total %}{{ r.wasted_total|qty }}{% else %}<span class="muted">—</span>{% endif %}{% if r.adjusted %}<div class="small muted">fix {{ r.adjusted|qty }}</div>{% endif %}</td>
+        <td class="r num"><strong>{{ r.expected|qty:r.item.unit }}</strong></td>
+        <td class="r num">{% if r.counted is not None %}{{ r.counted|qty:r.item.unit }}{% else %}<span class="muted">not counted</span>{% endif %}</td>
+        <td class="r num">{% if r.variance is None %}<span class="muted">—</span>
+          {% elif r.variance < 0 %}<span class="var-neg">{{ r.variance|qty:r.item.unit }}</span><div class="small var-neg">{{ r.variance_value|inr }}</div>
+          {% elif r.variance > 0 %}<span class="var-pos">+{{ r.variance|qty:r.item.unit }}</span>
+          {% else %}<span class="var-zero">✓ exact</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="8"><div class="empty">No stock items yet.</div></td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-foot small muted">“Should have” = opening + bought − used by bills − wasted − staff meals. Count the real amount at closing; a <span class="var-neg">red</span> difference means stock is missing.</div>
+</div>
+
+<div class="grid-2 mt" style="align-items:start">
+  <div class="card">
+    <div class="card-head"><h2>Recent entries</h2><a class="btn btn-sm btn-ghost" href="/stock/history/">All {% icon 'right' 'sm' %}</a></div>
+    <div class="table-wrap"><table class="table compact"><tbody>{% for m in recent %}
+      <tr><td><strong>{{ m.get_kind_display }}</strong> · {{ m.stock_item }}<div class="small muted">{{ m.business_date|date:"d M" }} · {{ m.created_by }}{% if m.note %} · {{ m.note }}{% endif %}</div></td>
+        <td class="r num">{% if m.delta > 0 %}+{% endif %}{{ m.delta|qty:m.stock_item.unit }}</td></tr>
+    {% empty %}<tr><td class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+  <div class="card card-pad stack">
+    <h2>More</h2>
+    <a class="btn btn-block" href="/stock/prep/">{% icon 'flame' %} Prep plan for tomorrow</a>
+    {% if user.is_owner %}
+      <a class="btn btn-block" href="/stock/recipes/">{% icon 'menu' %} Recipes (how much each item uses)</a>
+      <a class="btn btn-block" href="/stock/variance/">{% icon 'loss' %} Missing stock report</a>
+      <a class="btn btn-block" href="/stock/items/">{% icon 'stock' %} Stock items &amp; prices</a>
+      <a class="btn btn-block" href="/stock/record/adjust/">{% icon 'edit' %} Correction</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

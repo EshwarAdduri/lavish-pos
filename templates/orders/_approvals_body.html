@@ -1,0 +1,20 @@
+{% load lavish %}
+<div class="card mb">
+  <div class="card-head"><h2>Waiting for you</h2><span class="pill {% if pending %}pill-unpaid{% endif %}">{{ pending|length }}</span></div>
+  <div class="table-wrap"><table class="table"><tbody>{% for a in pending %}
+    <tr><td><strong>{{ a.get_kind_display }}{% if a.discount_amount %} of {{ a.discount_amount|inr }}{% endif %}</strong> on <a href="/orders/{{ a.order.pk }}/">#{{ a.order.token_no }} · {{ a.order.bill_number }}</a> ({{ a.order.total|inr }})
+      <div class="small muted">{{ a.requested_by }} · {{ a.created_at|timesince }} ago · “{{ a.reason }}”</div></td>
+      <td class="r"><form method="post" action="/approvals/{{ a.pk }}/decide/" class="row" style="justify-content:flex-end">{% csrf_token %}
+        <input type="text" name="note" placeholder="Note (optional)" style="width:160px" class="input-sm">
+        <button class="btn btn-ok btn-sm" name="decision" value="approve">{% icon 'check' 'sm' %} Approve</button>
+        <button class="btn btn-danger btn-sm" name="decision" value="reject">Reject</button></form></td></tr>
+  {% empty %}<tr><td><div class="empty">All clear — nothing to approve.</div></td></tr>{% endfor %}</tbody></table></div>
+</div>
+<div class="card">
+  <div class="card-head"><h2>Recent decisions</h2></div>
+  <div class="table-wrap"><table class="table compact"><tbody>{% for a in done %}
+    <tr><td>{{ a.get_kind_display }} · <a href="/orders/{{ a.order.pk }}/">{{ a.order.bill_number }}</a><div class="small muted">{{ a.requested_by }}: “{{ a.reason }}”</div></td>
+      <td><span class="pill {% if a.status == 'approved' %}pill-paid{% else %}pill-unpaid{% endif %}">{{ a.get_status_display }}</span></td>
+      <td class="small muted">{{ a.decided_by }} · {{ a.decided_at|date:"d M h:i A" }}</td></tr>
+  {% empty %}<tr><td class="muted">None yet.</td></tr>{% endfor %}</tbody></table></div>
+</div>

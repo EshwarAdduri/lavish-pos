@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load lavish %}
+{% block title %}Recipes{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="small" href="/stock/">← Stock</a><h1>Recipes</h1>
+  <div class="sub">How much of each stock item <strong>one</strong> menu item uses. Chicken in kg of <strong>raw</strong> chicken (0.120 = 120 g), rotis in pieces. Leave empty for “none”.</div></div></div>
+<div class="alert alert-info mb small">{% icon 'alert' %}<div>Tip for chicken: weigh the raw chicken you put on the spit, then count how many shawarmas it made. Raw kg ÷ shawarmas = kg per shawarma.
+  Yellow boxes are my starting guesses — saving this page confirms them.</div></div>
+<form method="post">
+  {% csrf_token %}
+  <div class="card"><div class="table-wrap" style="max-height:70vh"><table class="table compact recipe-grid">
+    <thead><tr><th>Menu item</th>{% for s in stock_items %}<th class="r">{{ s.name }}<div style="text-transform:none;font-weight:600">{{ s.unit }}</div></th>{% endfor %}</tr></thead>
+    <tbody>{% for r in rows %}{% ifchanged r.group %}<tr><td colspan="{{ stock_items|length|add:1 }}" style="background:var(--surface-2)"><strong>{{ r.group }}</strong></td></tr>{% endifchanged %}
+      <tr><td>{{ r.name }}{% if r.size and r.size != "Regular" %} <span class="muted">({{ r.size }})</span>{% endif %}</td>
+        {% for key, line in r.cells %}<td class="r {% if line and not line.verified %}unverified{% endif %}"><input type="number" name="{{ key }}" step="0.001" min="0" inputmode="decimal" value="{% if line %}{{ line.quantity|qty }}{% endif %}" placeholder="—"></td>{% endfor %}</tr>
+    {% endfor %}</tbody>
+  </table></div></div>
+  <div class="row mt"><button class="btn btn-primary btn-lg">Save recipes</button><span class="small muted">Only affects new bills. Past bills keep what they used.</span></div>
+</form>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Settings</h1><div class="sub">Shop details, receipt, and staff limits.</div></div></div>
+<form method="post" class="card card-pad form" style="max-width:640px">
+  {% csrf_token %}
+  {% include "partials/form_fields.html" %}
+  <button class="btn btn-primary btn-lg">Save settings</button>
+</form>
+{% endblock %}

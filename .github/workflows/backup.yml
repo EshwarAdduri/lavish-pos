@@ -1,0 +1,40 @@
+# Nightly database backup (free). Runs every night at 3:30 AM India time and
+# keeps each backup for 30 days under GitHub → Actions → this workflow → Artifacts.
+# Needs one repository secret: SUPABASE_DB_URL (the same Session pooler URI the app uses).
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 22:00 UTC = 03:30 IST
+  workflow_dispatch: {}      # lets you click "Run workflow" any time
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get install -y -q curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client-17
+
+      - name: Dump database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then echo "Add the SUPABASE_DB_URL secret first."; exit 1; fi
+          STAMP=$(TZ=Asia/Kolkata date +%Y-%m-%d_%H%M)
+          mkdir -p backup
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --schema=public --no-owner --no-privileges --format=custom --file="backup/lavish_${STAMP}.dump"
+          ls -lh backup
+
+      - name: Save backup (kept 30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lavish-db-backup-${{ github.run_number }}
+          path: backup/
+          retention-days: 30

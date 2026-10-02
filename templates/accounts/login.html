@@ -1,0 +1,39 @@
+{% load static %}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Log in · {{ shop.shop_name }}</title>
+  <meta name="theme-color" content="#E8590C">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="{% static 'icons/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <script>(function(){try{var t=localStorage.getItem("ls-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})();</script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+<main class="login-page">
+  <form class="card login-card form" method="post" action="/login/">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.GET.next }}">
+    <div class="center">
+      <div class="brand-mark">LS</div>
+      <h1>{{ shop.shop_name }}</h1>
+      <p class="muted">{{ shop.tagline|default:"Billing & money tracker" }}</p>
+    </div>
+    {% if error %}<div class="alert alert-bad">{{ error }}</div>{% endif %}
+    <div class="field">
+      <label for="u">Username</label>
+      <input id="u" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" required autofocus>
+    </div>
+    <div class="field">
+      <label for="p">Password</label>
+      <input id="p" type="password" name="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary btn-lg btn-block" type="submit">Log in</button>
+    <p class="small muted center" style="margin:0">{{ shop.address }}</p>
+  </form>
+</main>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(function(){})}</script>
+</body>
+</html>
