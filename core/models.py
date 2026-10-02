@@ -11,10 +11,17 @@ class ShopSettings(models.Model):
     tagline = models.CharField(max_length=120, blank=True, default="Fresh • Juicy • Loaded")
     address = models.CharField(max_length=200, blank=True, default="Mancherial, Telangana")
     phone = models.CharField(max_length=30, blank=True)
+    upi_id = models.CharField(
+        max_length=80, blank=True, help_text="Your UPI ID for the payment QR, e.g. lavishshawarma@okaxis. Leave empty to hide the QR."
+    )
+    upi_name = models.CharField(max_length=60, blank=True, default="Lavish Shawarma", help_text="Name shown in the customer's UPI app.")
     receipt_footer = models.CharField(max_length=200, blank=True, default="Thank you! Visit again.")
     bill_prefix = models.CharField(max_length=8, default="LS")
     receipt_width_mm = models.PositiveSmallIntegerField(
         default=80, choices=[(58, "58 mm"), (80, "80 mm")]
+    )
+    table_count = models.PositiveSmallIntegerField(
+        default=8, help_text="How many dine-in tables to show as quick buttons on the billing screen (0 = none)."
     )
     # Shop day: orders before this hour count for the previous day (late-night sales).
     day_starts_at_hour = models.PositiveSmallIntegerField(

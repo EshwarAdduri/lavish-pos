@@ -4,7 +4,9 @@ from .models import ShopSettings
 
 
 def shop(request):
-    data = {"DEBUG": settings.DEBUG}
+    from . import demo
+
+    data = {"DEBUG": settings.DEBUG, "demo": getattr(request, "demo", None), "demo_enabled": demo.enabled()}
     if request.path.startswith("/static/"):
         return data
     data["shop"] = ShopSettings.load()

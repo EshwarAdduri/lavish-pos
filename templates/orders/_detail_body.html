@@ -6,14 +6,14 @@
     <div class="row mt-s" style="gap:6px">
       <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span>
       {% if order.status != "cancelled" %}{% if order.is_paid %}<span class="pill pill-paid">Paid</span>{% else %}<span class="pill pill-unpaid">{{ order.balance|inr }} due</span>{% endif %}{% endif %}
-      <span class="pill">{{ order.get_order_type_display }}{% if order.platform %} · {{ order.get_platform_display }}{% endif %}</span>
+      <span class="pill">{{ order.get_order_type_display }}{% if order.table_no %} · Table {{ order.table_no }}{% endif %}{% if order.platform %} · {{ order.get_platform_display }}{% endif %}</span>
       <span class="small muted">{{ order.created_at|date:"D d M, h:i A" }} · {{ order.created_by }}{% if order.device %} · {{ order.device }}{% endif %}</span>
     </div>
   </div>
   <div class="toolbar">
     <a class="btn" href="/orders/{{ order.pk }}/receipt/?print=1" target="_blank">{% icon 'print' %} Print</a>
     <a class="btn" href="/orders/{{ order.pk }}/receipt.pdf" target="_blank">{% icon 'file' %} PDF</a>
-    {% if can_edit %}<a class="btn" href="/pos/?edit={{ order.pk }}">{% icon 'edit' %} Edit items</a>{% endif %}
+    {% if can_edit %}<a class="btn btn-primary" href="/pos/?edit={{ order.pk }}">{% icon 'plus' %} Add / edit items</a>{% endif %}
   </div>
 </div>
 

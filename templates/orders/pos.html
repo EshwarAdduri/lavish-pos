@@ -12,30 +12,44 @@
 
 <div class="pos" x-data="posApp()" x-cloak>
 
-  <!-- ============================================== MENU -->
+  <!-- ============================================== LEFT: MENU or OPEN ORDERS -->
   <section class="pos-menu">
     <div class="pos-top">
+      <div class="seg full pos-tabs" role="tablist">
+        <button type="button" :aria-pressed="view === 'menu'" @click="view = 'menu'">{% icon 'menu' 'sm' %} Menu</button>
+        <button type="button" :aria-pressed="view === 'orders'" @click="view = 'orders'; loadRecent()">
+          {% icon 'orders' 'sm' %} Open orders <span class="tab-count" x-show="openCount" x-text="openCount"></span></button>
+      </div>
+
       <template x-if="edit">
-        <div class="alert alert-info">{% icon 'edit' %}
-          <div>Editing bill <strong x-text="edit.bill"></strong>. Save to update it.
-            <a href="#" @click.prevent="clear(true)">Stop editing</a></div>
+        <div class="alert alert-info edit-banner">{% icon 'edit' %}
+          <div style="flex:1">Adding to <strong x-text="edit.label"></strong>
+            <span x-show="edit.paid > 0" x-text="'· ' + inr(edit.paid) + ' already paid'"></span>.
+            Tap items, then <strong>Save</strong>.</div>
+          <button class="btn btn-sm" @click="clear(true)">Cancel</button>
         </div>
       </template>
-      <div class="search">
-        {% icon 'search' %}
-        <input x-ref="search" type="search" placeholder="Search menu…" x-model="q" autocomplete="off"
-               @keydown.enter.prevent="items.length && tap(items[0])" aria-label="Search menu">
-        <kbd class="only-desktop" x-show="!q">/</kbd>
-      </div>
-      <div class="chips" role="tablist">
-        <button class="chip" :class="{ on: cat === null && !q }" @click="cat = null; q = ''">All</button>
-        <template x-for="c in menu.categories" :key="c.id">
-          <button class="chip" :class="{ on: cat === c.id && !q }" @click="cat = c.id; q = ''" x-text="c.name"></button>
-        </template>
-      </div>
+
+      <template x-if="view === 'menu'">
+        <div class="stack" style="gap:10px">
+          <div class="search">
+            {% icon 'search' %}
+            <input x-ref="search" type="search" placeholder="Search menu…" x-model="q" autocomplete="off"
+                   @keydown.enter.prevent="items.length && tap(items[0])" aria-label="Search menu">
+            <kbd class="only-desktop" x-show="!q">/</kbd>
+          </div>
+          <div class="chips" role="tablist">
+            <button class="chip" :class="{ on: cat === null && !q }" @click="cat = null; q = ''">All</button>
+            <template x-for="c in menu.categories" :key="c.id">
+              <button class="chip" :class="{ on: cat === c.id && !q }" @click="cat = c.id; q = ''" x-text="c.name"></button>
+            </template>
+          </div>
+        </div>
+      </template>
     </div>
 
-    <div class="pos-grid">
+    <!-- Menu tiles -->
+    <div class="pos-grid" x-show="view === 'menu'">
       <template x-for="it in items" :key="it.id">
         <button type="button" class="tile" :class="{ 'sold-out': it.soldOut }" @click="tap(it, $event)">
           <span class="t-qty" x-show="qtyOf(it.id) > 0" x-text="qtyOf(it.id)"></span>
@@ -51,27 +65,63 @@
         {% icon 'search' %}<div>No items match “<span x-text="q"></span>”.</div>
       </div>
     </div>
+
+    <!-- Open / recent orders -->
+    <div class="pos-orders" x-show="view === 'orders'">
+      <div class="empty" x-show="recentLoaded && !recent.open.length && !recent.done.length">{% icon 'orders' 'lg' %}<div>No orders yet today.</div></div>
+      <template x-for="(group, gi) in [{ title: 'Open — not served or not paid', list: recent.open }, { title: 'Recent', list: recent.done }]" :key="gi">
+        <div x-show="group.list.length">
+          <div class="group-title" x-text="group.title"></div>
+          <div class="order-cards">
+            <template x-for="o in group.list" :key="o.id">
+              <article class="order-card" :class="{ busy: busyId === o.id, 'is-open': gi === 0 }">
+                <div class="oc-head">
+                  <span class="oc-label" x-text="o.label"></span>
+                  <span class="pill" :class="'pill-' + o.status" x-text="o.statusLabel"></span>
+                  <span class="pill" :class="o.balance > 0 ? 'pill-unpaid' : 'pill-paid'" x-text="o.balance > 0 ? inr(o.balance) + ' due' : 'Paid'"></span>
+                  <span class="oc-total num" x-text="inr(o.total)"></span>
+                </div>
+                <div class="small muted" x-text="o.time + ' · ' + o.type + (o.platform ? ' · ' + o.platform : '') + (o.customer ? ' · ' + o.customer : '')"></div>
+                <div class="oc-items" x-text="o.items.join(', ')"></div>
+                <div class="oc-actions">
+                  <button class="btn btn-sm btn-primary" @click="openOrder(o.id)" :disabled="busyId === o.id">{% icon 'plus' 'sm' %} Add items</button>
+                  <button class="btn btn-sm btn-ok" x-show="o.balance > 0" @click="payOrder(o)" x-text="'Pay ' + inr(o.balance)"></button>
+                  <button class="btn btn-sm" x-show="o.balance <= 0 && o.status !== 'completed'" @click="setStatus(o, 'completed')" :disabled="busyId === o.id">{% icon 'check' 'sm' %} Done</button>
+                  <button class="btn btn-sm btn-ghost btn-icon" @click="print(o.id)" title="Print receipt" aria-label="Print">{% icon 'print' 'sm' %}</button>
+                  <a class="btn btn-sm btn-ghost btn-icon" :href="'/orders/' + o.id + '/'" title="Open bill" aria-label="Open bill">{% icon 'right' 'sm' %}</a>
+                </div>
+              </article>
+            </template>
+          </div>
+        </div>
+      </template>
+      <a class="btn btn-block btn-ghost mt" href="/orders/">All orders {% icon 'right' 'sm' %}</a>
+    </div>
   </section>
 
   <!-- ============================================== CART -->
   <aside class="pos-cart" :class="{ open: cartOpen }">
     <div class="cart-head">
       <button class="btn btn-ghost btn-icon only-mobile" @click="cartOpen = false" aria-label="Back to menu">{% icon 'left' %}</button>
-      <h2 style="flex:1">Current order <span class="muted small" x-show="count" x-text="'· ' + count + ' item' + (count > 1 ? 's' : '')"></span></h2>
-      <button class="btn btn-ghost btn-sm" @click="clear()" x-show="lines.length">Clear</button>
+      <h2 style="flex:1"><span x-text="edit ? edit.label : 'New order'"></span>
+        <span class="muted small" x-show="count" x-text="'· ' + count + ' item' + (count > 1 ? 's' : '')"></span></h2>
+      <button class="btn btn-ghost btn-sm" @click="clear()" x-show="lines.length && !edit">Clear</button>
+      <button class="btn btn-ghost btn-sm" @click="clear(true)" x-show="edit">Cancel</button>
     </div>
 
     <div class="cart-lines">
       <div class="empty" x-show="!lines.length">
         {% icon 'bag' 'lg' %}
         <div>Tap items to add them.</div>
+        <button class="btn btn-sm mt" x-show="openCount" @click="view = 'orders'; cartOpen = false">Add to an open order instead</button>
       </div>
       <template x-for="l in lines" :key="l.key">
-        <div class="cart-line">
+        <div class="cart-line" :class="{ 'is-new': l.isNew }">
           <div class="cl-top">
             <span class="food-dot" :class="l.food" style="margin-top:3px"></span>
             <div class="cl-name">
               <span x-text="l.name"></span><span class="muted" x-show="l.size" x-text="' (' + l.size + ')'"></span>
+              <span class="pill pill-brand" x-show="l.isNew" style="margin-left:4px">new</span>
               <div class="small muted" x-show="l.addons.length" x-text="'+ ' + l.addons.map(a => a.name).join(', ')"></div>
             </div>
             <span class="cl-amt" x-text="inr(lineTotal(l))"></span>
@@ -98,6 +148,16 @@
         <template x-for="t in cfg.orderTypes" :key="t[0]">
           <button type="button" :aria-pressed="orderType === t[0]" @click="orderType = t[0]" x-text="t[1]"></button>
         </template>
+      </div>
+      <div x-show="orderType === 'dine_in'" class="table-pick">
+        <span class="small muted">Table</span>
+        <div class="chips">
+          <template x-for="t in cfg.tables" :key="t">
+            <button type="button" class="chip chip-sm table-chip" :class="{ on: tableNo === t }" @click="tableNo = (tableNo === t ? '' : t)" x-text="t"></button>
+          </template>
+          <input type="text" class="input-sm table-input" placeholder="Other" maxlength="10" aria-label="Table number"
+                 :value="cfg.tables.includes(tableNo) ? '' : tableNo" @input="tableNo = $event.target.value.trim()">
+        </div>
       </div>
       <div x-show="orderType === 'online'" class="row">
         <template x-for="p in cfg.platforms" :key="p[0]">
@@ -131,12 +191,16 @@
         <div class="spread muted" x-show="discountValue"><span>Subtotal</span><span class="num" x-text="inr(subtotal)"></span></div>
         <div class="spread muted" x-show="discountValue"><span>Discount</span><span class="num" x-text="'−' + inr(discountValue)"></span></div>
         <div class="spread grand"><span>Total</span><span class="num" x-text="inr(total)"></span></div>
+        <div class="spread small" x-show="edit && alreadyPaid > 0"><span class="muted" x-text="'Already paid ' + inr(alreadyPaid)"></span>
+          <strong :class="due > 0 ? 'down' : 'up'" x-text="due > 0 ? inr(due) + ' to collect' : 'Nothing more to pay'"></strong></div>
       </div>
-      <div class="grid-2" style="grid-template-columns: 1fr 1.6fr; gap:8px">
-        <button class="btn btn-lg" :disabled="!lines.length || saving" @click="submit(false)"
-                x-text="edit ? 'Save changes' : 'Save · pay later'"></button>
-        <button class="btn btn-primary btn-lg" :disabled="!lines.length || saving" @click="openPay()">
-          {% icon 'cash' %} <span x-text="'Pay ' + inr(total)"></span></button>
+      <div class="cart-actions" :class="{ single: !otherAction }">
+        <button class="btn btn-lg" x-show="otherAction" :disabled="!lines.length || saving"
+                @click="run(otherAction)" x-text="otherAction && otherAction.label"></button>
+        <button class="btn btn-primary btn-lg" :disabled="!lines.length || saving" @click="run(mainAction)">
+          <span x-show="mainAction.act === 'pay'">{% icon 'cash' %}</span>
+          <span x-show="mainAction.act === 'save'">{% icon 'check' %}</span>
+          <span x-text="saving ? 'Saving…' : mainAction.label"></span></button>
       </div>
     </div>
   </aside>
@@ -144,10 +208,10 @@
   <!-- mobile cart bar -->
   <div class="cart-bar" x-show="lines.length && !cartOpen" x-transition>
     <div>
-      <div class="small" style="opacity:.75" x-text="count + ' item' + (count > 1 ? 's' : '')"></div>
+      <div class="small" style="opacity:.75" x-text="(edit ? edit.label + ' · ' : '') + count + ' item' + (count > 1 ? 's' : '')"></div>
       <div class="cb-total" x-text="inr(total)"></div>
     </div>
-    <button class="btn btn-primary" @click="cartOpen = true">View order {% icon 'right' %}</button>
+    <button class="btn btn-primary" @click="cartOpen = true"><span x-text="edit ? 'Review & save' : 'View order'"></span> {% icon 'right' %}</button>
   </div>
 
   <!-- ============================================== SIZE PICKER -->
@@ -170,11 +234,12 @@
 
   <!-- ============================================== PAYMENT -->
   <template x-if="payOpen">
-    <div class="modal-backdrop" @click.self="!saving && (payOpen = false)">
+    <div class="modal-backdrop" @click.self="!saving && (payOpen = false, payTarget = null)">
       <div class="modal">
         <div class="modal-head">
-          <div><div class="muted small">Amount to collect</div><div class="big-token num" x-text="inr(total)"></div></div>
-          <button class="btn btn-ghost btn-icon" @click="payOpen = false" :disabled="saving" aria-label="Close">{% icon 'x' %}</button>
+          <div><div class="muted small" x-text="payTarget ? 'Collect for ' + payTarget.label : (edit ? 'Collect for ' + edit.label : 'Amount to collect')"></div>
+            <div class="big-token num" x-text="inr(payAmount)"></div></div>
+          <button class="btn btn-ghost btn-icon" @click="payOpen = false; payTarget = null" :disabled="saving" aria-label="Close">{% icon 'x' %}</button>
         </div>
         <div class="pay-methods">
           <button type="button" class="pay-method" :class="{ on: method === 'cash' }" @click="method = 'cash'">{% icon 'cash' 'lg' %}Cash</button>
@@ -189,10 +254,19 @@
             <div class="input-money"><input type="number" inputmode="decimal" min="0" step="1" x-model="tendered" placeholder="e.g. 500"></div>
           </div>
           <div class="quick-cash">
-            <button type="button" class="btn btn-sm" @click="tendered = String(total)">Exact</button>
+            <button type="button" class="btn btn-sm" @click="tendered = String(payAmount)">Exact</button>
             <template x-for="v in quickCash" :key="v"><button type="button" class="btn btn-sm" @click="tendered = String(v)" x-text="inr(v)"></button></template>
           </div>
           <div class="change-due" x-show="change !== null"><span>Give change</span><span class="num" x-text="inr(change)"></span></div>
+        </div>
+        <div class="upi-qr mt" x-show="method === 'upi'">
+          <template x-if="cfg.upi && method === 'upi'">
+            <div class="center">
+              <img :src="qrUrl" alt="UPI QR code" width="220" height="220">
+              <div class="small muted">Customer scans with any UPI app — amount is filled in.</div>
+            </div>
+          </template>
+          <div class="alert alert-warn small" x-show="!cfg.upi">Add your UPI ID in <a href="/settings/">Settings</a> to show a payment QR here.</div>
         </div>
         <div class="form mt" x-show="method === 'upi' || method === 'card'">
           <div class="field"><label>Reference / last 4 digits (optional)</label><input type="text" x-model="reference" maxlength="60"></div>
@@ -213,14 +287,15 @@
     <div class="modal-backdrop" @click.self="newOrder()">
       <div class="modal center">
         <div class="done-check">{% icon 'check' 'lg' %}</div>
-        <div class="muted">Token</div>
-        <div class="big-token" x-text="'#' + done.token"></div>
+        <div class="muted" x-text="done.edited ? 'Updated' : 'Token'"></div>
+        <div class="big-token" x-text="done.label"></div>
         <div class="muted mb" x-text="done.bill + ' · ' + inr(done.total) + (done.balance > 0 ? ' · ' + inr(done.balance) + ' unpaid' : ' · paid')"></div>
         <div class="change-due mb" x-show="done.change" style="justify-content:center; gap:12px">
           <span>Give change</span><span class="num" x-text="inr(done.change)"></span></div>
+        <button class="btn btn-ok btn-lg btn-block mb" x-show="done.balance > 0" @click="collectFromDone()">{% icon 'cash' %} <span x-text="'Collect ' + inr(done.balance) + ' now'"></span></button>
         <div class="grid-2" style="gap:8px">
-          <button class="btn btn-lg" @click="print(done.id)">{% icon 'print' %} Print receipt</button>
-          <a class="btn btn-lg" :href="'/orders/' + done.id + '/'">{% icon 'orders' %} Open bill</a>
+          <button class="btn btn-lg" @click="print(done.id)">{% icon 'print' %} Print</button>
+          <button class="btn btn-lg" @click="openOrder(done.id)">{% icon 'plus' %} Add more</button>
         </div>
         <button class="btn btn-primary btn-xl btn-block mt" @click="newOrder()">{% icon 'plus' %} New order</button>
       </div>

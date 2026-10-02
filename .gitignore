@@ -18,4 +18,5 @@ backups/
 .DS_Store
 .vscode/
 .idea/
-README.md
+demo_data/
+test_db.sqlite3

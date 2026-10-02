@@ -51,6 +51,8 @@ def login_view(request):
 
 @require_POST
 def logout_view(request):
+    if getattr(request, "demo", None):
+        return redirect("/demo/end/")
     if request.user.is_authenticated:
         audit.log("logout", request.user, model="User")
     logout(request)

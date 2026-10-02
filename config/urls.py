@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.urls import path
 
 from accounts import views as acc
+from core import demo_views
+from core import upi
 from core import views as core
 from menu import views as menu
 from money import views as money
@@ -14,9 +16,15 @@ urlpatterns = [
     path("", core.home, name="home"),
     path("healthz", core.healthz, name="healthz"),
     path("live/pulse/", core.pulse, name="pulse"),
+    path("upi/qr.svg", upi.upi_qr, name="upi_qr"),
     path("manifest.webmanifest", core.manifest, name="manifest"),
     path("sw.js", core.service_worker, name="sw"),
     path("offline/", core.offline, name="offline"),
+
+    # demo
+    path("demo/start/", demo_views.start, name="demo_start"),
+    path("demo/enter/", demo_views.enter, name="demo_enter"),
+    path("demo/end/", demo_views.end, name="demo_end"),
 
     # accounts
     path("login/", acc.login_view, name="login"),
@@ -30,6 +38,10 @@ urlpatterns = [
     # POS & orders
     path("pos/", orders.pos, name="pos"),
     path("pos/menu.json", orders.pos_menu, name="pos_menu"),
+    path("pos/recent.json", orders.pos_recent, name="pos_recent"),
+    path("orders/<int:pk>/edit.json", orders.order_edit_json, name="order_edit_json"),
+    path("orders/<int:pk>/pay.json", orders.order_pay_json, name="order_pay_json"),
+    path("orders/<int:pk>/status.json", orders.order_status_json, name="order_status_json"),
     path("orders/new/", orders.order_create, name="order_create"),
     path("orders/", orders.orders_list, name="orders"),
     path("orders/board/", orders.board, name="board"),

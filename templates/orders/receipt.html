@@ -19,6 +19,7 @@
   <div class="rc-rule"></div>
   <div class="rc-row"><strong>Bill {{ order.bill_number }}</strong><strong>Token #{{ order.token_no }}</strong></div>
   <div class="rc-row"><span>{{ order.created_at|date:"d M Y h:i A" }}</span><span>{{ order.get_order_type_display }}{% if order.platform %} · {{ order.get_platform_display }}{% endif %}</span></div>
+  {% if order.table_no %}<div><strong>Table {{ order.table_no }}</strong></div>{% endif %}
   {% if order.customer_name %}<div>Customer: {{ order.customer_name }}</div>{% endif %}
   <div class="rc-rule"></div>
   {% for i in order.items.all %}
@@ -36,6 +37,13 @@
     {% for p in order.payments.all %}<div class="rc-row"><span>{{ p.get_method_display }}{% if p.amount < 0 %} refund{% endif %}</span><span>{{ p.amount|inr }}</span></div>
       {% if p.cash_tendered %}<div class="rc-row rc-sub"><span>Given / change</span><span>{{ p.cash_tendered|inr }} / {{ p.change|inr }}</span></div>{% endif %}{% endfor %}
     {% if order.balance > 0 %}<div class="rc-row"><strong>Balance due</strong><strong>{{ order.balance|inr }}</strong></div>{% endif %}
+  {% endif %}
+  {% if shop.upi_id and order.balance > 0 and order.status != "cancelled" %}
+    <div class="rc-rule"></div>
+    <div class="rc-center"><strong>Scan to pay {{ order.balance|inr }} by UPI</strong>
+      <img src="/upi/qr.svg?amount={{ order.balance|stringformat:'s' }}&note={{ order.bill_number|urlencode }}" alt="UPI QR"
+           style="display:block;margin:4px auto;width:{% if width == 58 %}36mm{% else %}46mm{% endif %};height:auto">
+      <div style="font-size:.9em">{{ shop.upi_id }}</div></div>
   {% endif %}
   {% if order.status == "cancelled" %}<div class="rc-rule"></div><div class="rc-center"><strong>*** CANCELLED ***</strong></div>{% endif %}
   <div class="rc-rule"></div>

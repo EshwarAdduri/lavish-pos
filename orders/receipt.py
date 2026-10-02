@@ -72,6 +72,8 @@ def receipt_pdf(order, shop, width_mm=80) -> bytes:
     created = timezone.localtime(order.created_at)
     row(f"Bill: {order.bill_number}", f"Token #{order.token_no}", "DjB")
     row(created.strftime("%d %b %Y  %I:%M %p"), order.get_order_type_display() + (f" · {order.get_platform_display()}" if order.platform else ""))
+    if order.table_no:
+        text(f"Table {order.table_no}", "DjB")
     if order.customer_name:
         text(f"Customer: {order.customer_name}")
     rule()
@@ -96,6 +98,13 @@ def receipt_pdf(order, shop, width_mm=80) -> bytes:
                 row("  Cash given / change", f"{inr(p.cash_tendered)} / {inr(p.cash_tendered - p.amount)}", "Dj", fs - 1)
         if order.balance > 0:
             row("Balance due", inr(order.balance), "DjB")
+    if shop.upi_id.strip() and order.balance > 0 and order.status != "cancelled":
+        from core.upi import upi_link
+
+        rule()
+        text(f"Scan to pay {inr(order.balance)} by UPI", "DjB", fs, "center")
+        ops.append(("qr", upi_link(shop, order.balance, order.bill_number), (36 if width_mm == 58 else 46) * mm))
+        text(shop.upi_id, "Dj", fs - 1, "center")
     if order.status == "cancelled":
         rule()
         text("*** CANCELLED ***", "DjB", fs + 2, "center")
@@ -104,6 +113,8 @@ def receipt_pdf(order, shop, width_mm=80) -> bytes:
         text(shop.receipt_footer, "Dj", fs, "center")
 
     def step_of(o):
+        if o[0] == "qr":
+            return o[2] + lh * 0.5
         if o[0] == "rule":
             return lh * 0.6
         if o[0] == "text" and o[3] > fs + 2:
@@ -116,6 +127,15 @@ def receipt_pdf(order, shop, width_mm=80) -> bytes:
     c.setTitle(order.bill_number)
     y = height - 6 * mm
     for o in ops:
+        if o[0] == "qr":
+            from reportlab.graphics import renderPDF
+
+            from core.upi import qr_drawing
+
+            size = o[2]
+            y -= size + lh * 0.5
+            renderPDF.draw(qr_drawing(o[1], size), c, (W - size) / 2, y + lh * 0.25)
+            continue
         if o[0] == "rule":
             y -= lh * 0.25
             c.setDash(1, 2)

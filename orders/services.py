@@ -15,7 +15,7 @@ from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
-from core import audit
+from core import audit, demo
 from core.models import ShopSettings
 from core.utils import business_date_for, money
 from menu.models import Addon, Variant
@@ -218,7 +218,7 @@ def _check_discount(user, shop: ShopSettings, subtotal: Decimal, discount: Decim
 
 
 def _clean_header(payload: dict) -> dict:
-    order_type = payload.get("order_type") or OrderType.TAKEAWAY
+    order_type = payload.get("order_type") or OrderType.DINE_IN
     if order_type not in OrderType.values:
         raise OrderError("Unknown order type.")
     platform = payload.get("platform") or ""
@@ -226,9 +226,13 @@ def _clean_header(payload: dict) -> dict:
         raise OrderError("Unknown platform.")
     if order_type != OrderType.ONLINE:
         platform = ""
+    elif not platform:
+        platform = Platform.ZOMATO
+    table_no = str(payload.get("table_no", "") or "").strip()[:10] if order_type == OrderType.DINE_IN else ""
     return {
         "order_type": order_type,
         "platform": platform,
+        "table_no": table_no,
         "customer_name": str(payload.get("customer_name", ""))[:60].strip(),
         "customer_phone": str(payload.get("customer_phone", ""))[:20].strip(),
         "note": str(payload.get("note", ""))[:200].strip(),
@@ -241,6 +245,7 @@ def _clean_header(payload: dict) -> dict:
 def create_order(user, device, payload: dict) -> Order:
     shop = ShopSettings.load()
     _check_staff_limits(user, shop)
+    demo.check_order_limits()
     header = _clean_header(payload)
     lines = _parse_lines(payload.get("lines"))
     discount = _dec(payload.get("discount_amount"), "discount")
@@ -269,22 +274,39 @@ def create_order(user, device, payload: dict) -> Order:
     pay = payload.get("payment")
     if pay:
         add_payment(order, user, device, pay.get("method"), pay.get("amount") or order.total,
-                    cash_tendered=pay.get("cash_tendered"), reference=pay.get("reference", ""))
+                    cash_tendered=pay.get("cash_tendered"), reference=pay.get("reference", ""),
+                    auto_complete=False)  # paid up-front: the kitchen still has to make it
         order.refresh_from_db()
     return order
 
 
+def _line_counts(pairs) -> dict:
+    """{(variant_id, (addon ids…)): quantity} — used to see if an edit only ADDS items."""
+    out: dict = defaultdict(int)
+    for variant_id, addon_ids, qty in pairs:
+        out[(variant_id, tuple(sorted(addon_ids)))] += qty
+    return out
+
+
+def is_add_only(order: Order, lines: list[Line]) -> bool:
+    old = _line_counts(
+        (i.variant_id, [a.addon_id for a in i.addons.all()], i.quantity) for i in order.items.prefetch_related("addons")
+    )
+    new = _line_counts((ln.variant.id, [a.id for a in ln.addons], ln.quantity) for ln in lines)
+    return all(new.get(k, 0) >= q for k, q in old.items())
+
+
 @transaction.atomic
 def update_order(order: Order, user, device, payload: dict) -> Order:
+    """
+    Change the items on a bill.
+    Anyone may ADD items (e.g. a water bottle 5 minutes later), even to a paid bill.
+    Removing / reducing items or changing the discount on a paid or finished bill is owner-only.
+    """
     order = Order.objects.select_for_update().get(pk=order.pk)
     shop = ShopSettings.load()
     if order.status == OrderStatus.CANCELLED:
         raise OrderError("A cancelled order cannot be edited.")
-    if not user.is_owner:
-        if order.paid_amount > 0:
-            raise OrderError("This order is already paid. Only the owner can change it.")
-        if order.status not in (OrderStatus.PENDING, OrderStatus.PREPARING):
-            raise OrderError("Only pending or preparing orders can be edited.")
     try:
         expected = int(payload.get("version", order.version))
     except (TypeError, ValueError):
@@ -295,11 +317,17 @@ def update_order(order: Order, user, device, payload: dict) -> Order:
     header = _clean_header(payload)
     lines = _parse_lines(payload.get("lines"))
     discount = _dec(payload.get("discount_amount"), "discount")
+    adding_only = is_add_only(order, lines)
+    old_count = order.item_count
 
-    before = {
-        "items": [str(i) for i in order.items.all()],
-        "total": str(order.total),
-    }
+    if not user.is_owner:
+        locked = order.paid_amount > 0 or order.status in (OrderStatus.READY, OrderStatus.COMPLETED)
+        if locked and not adding_only:
+            raise OrderError("This bill is paid or already served. You can add items, but only the owner can remove them.")
+        if locked and discount != order.discount_amount:
+            raise OrderError("Only the owner can change the discount on a paid bill.")
+
+    before = {"items": [str(i) for i in order.items.all()], "total": str(order.total)}
     order.items.all().delete()
     subtotal = _write_items(order, lines)
     # An already-approved discount is kept for staff edits.
@@ -313,9 +341,13 @@ def update_order(order: Order, user, device, payload: dict) -> Order:
     order.discount_amount = discount
     order.total = subtotal - discount
     order.version += 1
+    # New food added to a served bill -> back to the kitchen.
+    if sum(ln.quantity for ln in lines) > old_count and order.status in (OrderStatus.READY, OrderStatus.COMPLETED):
+        order.status = OrderStatus.PENDING
+        order.completed_at = None
     order.save()
     record_stock_usage(order)
-    audit.log("edit items", order, {
+    audit.log("added items" if adding_only else "edit items", order, {
         "items": [before["items"], [str(i) for i in order.items.all()]],
         "total": [before["total"], str(order.total)],
     })
@@ -329,7 +361,9 @@ def _refresh_paid(order: Order):
 
 
 @transaction.atomic
-def add_payment(order: Order, user, device, method, amount, cash_tendered=None, reference="", note="") -> Payment:
+def add_payment(order: Order, user, device, method, amount, cash_tendered=None, reference="", note="",
+                auto_complete=True) -> Payment:
+    """Record money received. A dine-in table that pays in full is leaving, so the order is closed (Completed)."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if order.status == OrderStatus.CANCELLED:
         raise OrderError("This order is cancelled.")
@@ -357,6 +391,11 @@ def add_payment(order: Order, user, device, method, amount, cash_tendered=None, 
         business_date=business_date_for(),
     )
     _refresh_paid(order)
+    if auto_complete and order.order_type == OrderType.DINE_IN and order.paid_amount >= order.total \
+            and order.status != OrderStatus.COMPLETED:
+        order.status = OrderStatus.COMPLETED
+        order.completed_at = timezone.now()
+        order.save(update_fields=["status", "completed_at", "updated_at"])
     return p
 
 
@@ -380,11 +419,12 @@ def refund(order: Order, user, device, method, amount, note="") -> Payment:
     return p
 
 
+# Orders only move forward. "Completed" is the end (adding new items re-opens it automatically).
 STATUS_FLOW = {
     OrderStatus.PENDING: [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.COMPLETED],
-    OrderStatus.PREPARING: [OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.PENDING],
-    OrderStatus.READY: [OrderStatus.COMPLETED, OrderStatus.PREPARING],
-    OrderStatus.COMPLETED: [OrderStatus.READY],
+    OrderStatus.PREPARING: [OrderStatus.READY, OrderStatus.COMPLETED],
+    OrderStatus.READY: [OrderStatus.COMPLETED],
+    OrderStatus.COMPLETED: [],
 }
 
 

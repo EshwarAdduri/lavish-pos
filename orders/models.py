@@ -11,14 +11,18 @@ from menu.models import Addon, FoodType, Item, Variant
 class OrderType(models.TextChoices):
     DINE_IN = "dine_in", "Dine-in"
     TAKEAWAY = "takeaway", "Takeaway"
-    PARCEL = "parcel", "Parcel"
     ONLINE = "online", "Online"
+    PARCEL = "parcel", "Parcel (old)"  # kept only so very old bills still show; not offered any more
+
+
+ACTIVE_ORDER_TYPES = [OrderType.DINE_IN, OrderType.TAKEAWAY, OrderType.ONLINE]
 
 
 class Platform(models.TextChoices):
     NONE = "", "—"
     ZOMATO = "zomato", "Zomato"
     SWIGGY = "swiggy", "Swiggy"
+    FOODATDOOR = "foodatdoor", "FoodAtDoor"
     OTHER = "other", "Other"
 
 
@@ -53,10 +57,11 @@ class Order(models.Model):
     token_no = models.PositiveIntegerField(help_text="Daily token number called out to customers.")
     business_date = models.DateField(db_index=True)
 
-    order_type = models.CharField(max_length=10, choices=OrderType.choices, default=OrderType.TAKEAWAY)
+    order_type = models.CharField(max_length=10, choices=OrderType.choices, default=OrderType.DINE_IN)
     platform = models.CharField(max_length=10, choices=Platform.choices, blank=True, default="")
     status = models.CharField(max_length=10, choices=OrderStatus.choices, default=OrderStatus.PENDING, db_index=True)
 
+    table_no = models.CharField(max_length=10, blank=True, help_text="Table number for dine-in orders.")
     customer_name = models.CharField(max_length=60, blank=True)
     customer_phone = models.CharField(max_length=20, blank=True)
     note = models.CharField(max_length=200, blank=True)
@@ -87,6 +92,11 @@ class Order(models.Model):
 
     def __str__(self):
         return self.bill_number
+
+    @property
+    def label(self) -> str:
+        """Short name used on screens: '#12 · T3'."""
+        return f"#{self.token_no}" + (f" · T{self.table_no}" if self.table_no else "")
 
     @property
     def balance(self) -> Decimal:

@@ -2,7 +2,7 @@
 <div class="card mb">
   <div class="card-head"><h2>Waiting for you</h2><span class="pill {% if pending %}pill-unpaid{% endif %}">{{ pending|length }}</span></div>
   <div class="table-wrap"><table class="table"><tbody>{% for a in pending %}
-    <tr><td><strong>{{ a.get_kind_display }}{% if a.discount_amount %} of {{ a.discount_amount|inr }}{% endif %}</strong> on <a href="/orders/{{ a.order.pk }}/">#{{ a.order.token_no }} · {{ a.order.bill_number }}</a> ({{ a.order.total|inr }})
+    <tr><td><strong>{{ a.get_kind_display }}{% if a.discount_amount %} of {{ a.discount_amount|inr }}{% endif %}</strong> on <a href="/orders/{{ a.order.pk }}/">{{ a.order.label }} · {{ a.order.bill_number }}</a> ({{ a.order.total|inr }})
       <div class="small muted">{{ a.requested_by }} · {{ a.created_at|timesince }} ago · “{{ a.reason }}”</div></td>
       <td class="r"><form method="post" action="/approvals/{{ a.pk }}/decide/" class="row" style="justify-content:flex-end">{% csrf_token %}
         <input type="text" name="note" placeholder="Note (optional)" style="width:160px" class="input-sm">

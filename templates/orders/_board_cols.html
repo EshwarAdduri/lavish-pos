@@ -5,7 +5,7 @@
     <h2><span>{{ label }}</span><span class="pill pill-{{ s }}">{{ orders|length }}</span></h2>
     {% for o in orders %}
       <article class="ticket">
-        <div class="tk-head"><a class="tk-token" href="/orders/{{ o.pk }}/" style="color:inherit">#{{ o.token_no }}</a>
+        <div class="tk-head"><a class="tk-token" href="/orders/{{ o.pk }}/" style="color:inherit">{{ o.label }}</a>
           <span class="age {% if o.age_minutes >= 15 %}late{% endif %}">{{ o.created_at|time:"h:i A" }} · {{ o.age_minutes }} min</span></div>
         <div class="row" style="gap:6px"><span class="pill">{{ o.get_order_type_display }}{% if o.platform %} · {{ o.get_platform_display }}{% endif %}</span>
           {% if o.is_paid %}<span class="pill pill-paid">Paid</span>{% else %}<span class="pill pill-unpaid">{{ o.balance|inr }} due</span>{% endif %}

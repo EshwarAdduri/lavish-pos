@@ -27,7 +27,7 @@
   <script defer src="{% static 'js/app.js' %}"></script>
   <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
 </head>
-<body class="app" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+<body class="app{% if demo %} has-demo{% endif %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
       data-owner="{% if user.is_owner %}1{% endif %}">
 {% include "partials/icons.html" %}
 {% with owner=user.is_owner %}
@@ -78,6 +78,15 @@
     </div>
   </header>
 
+  {% if demo %}
+  <div class="demo-bar" x-data="{ left: {{ demo.expires }} * 1000 - Date.now(), tick() { this.left = {{ demo.expires }} * 1000 - Date.now(); if (this.left <= 0) location.href = '/login/?demo=ended'; } }"
+       x-init="setInterval(() => tick(), 1000)">
+    <span><strong>Demo</strong><span class="demo-long"> · private copy, nothing is real</span> · resets in
+      <strong class="num" x-text="Math.max(0, Math.floor(left / 60000)) + ':' + String(Math.max(0, Math.floor(left / 1000) % 60)).padStart(2, '0')"></strong></span>
+    <form method="post" action="/demo/start/" style="display:inline">{% csrf_token %}<button class="btn btn-sm">Restart</button></form>
+    <a class="btn btn-sm btn-ghost" href="/demo/end/">Exit</a>
+  </div>
+  {% endif %}
   <main class="main {% block main_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>

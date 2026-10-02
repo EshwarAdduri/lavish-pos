@@ -49,7 +49,7 @@
     {% empty %}<tr><td class="muted">No sales yet.</td></tr>{% endfor %}</tbody></table></div></div>
   <div class="card"><div class="card-head"><h2>Latest payments</h2><a class="btn btn-sm btn-ghost" href="/orders/">Orders {% icon 'right' 'sm' %}</a></div>
     <div class="table-wrap"><table class="table compact"><tbody>{% for x in recent_payments %}
-      <tr><td><a href="/orders/{{ x.order.pk }}/">#{{ x.order.token_no }}</a> <span class="small muted">{{ x.created_at|time:"h:i A" }} · {{ x.received_by }}</span></td><td>{{ x.get_method_display }}</td><td class="r num">{{ x.amount|inr }}</td></tr>
+      <tr><td><a href="/orders/{{ x.order.pk }}/">{{ x.order.label }}</a> <span class="small muted">{{ x.created_at|time:"h:i A" }} · {{ x.received_by }}</span></td><td>{{ x.get_method_display }}</td><td class="r num">{{ x.amount|inr }}</td></tr>
     {% empty %}<tr><td class="muted">No payments yet today.</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 {% endblock %}

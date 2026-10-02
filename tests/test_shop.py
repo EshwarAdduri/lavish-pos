@@ -123,10 +123,37 @@ class StaffLimitTests(Base):
         self.assertEqual(o.total, D("125.00"))
         self.assertEqual(req.order.approvals.get().status, ApprovalRequest.Status.APPROVED)
 
-    def test_staff_cannot_edit_paid_order(self):
-        o = self.order(user=self.staff, payment={"method": "upi", "amount": "140"})
+    def test_staff_can_add_to_paid_order_but_not_remove(self):
+        o = self.order(user=self.staff, lines=[{"variant_id": self.peri.id, "qty": 2}], payment={"method": "upi", "amount": "280"})
+        services.set_status(o, self.staff, "completed")
+        o.refresh_from_db()
+        # 5 minutes later the table orders a water bottle: allowed, bill goes back to the kitchen, ₹10 due
+        water = Variant.objects.get(item__name="Water bottle")
+        o = services.update_order(o, self.staff, None, {"lines": [{"variant_id": self.peri.id, "qty": 2},
+                                                                   {"variant_id": water.id, "qty": 1}], "version": o.version})
+        self.assertEqual(o.total, D("290.00"))
+        self.assertEqual(o.balance, D("10.00"))
+        self.assertEqual(o.status, OrderStatus.PENDING)
+        # removing a paid shawarma is owner-only
         with self.assertRaises(services.OrderError):
-            services.update_order(o, self.staff, None, {"lines": [{"variant_id": self.peri.id, "qty": 2}], "version": o.version})
+            services.update_order(o, self.staff, None, {"lines": [{"variant_id": self.peri.id, "qty": 1},
+                                                                   {"variant_id": water.id, "qty": 1}], "version": o.version})
+        o = services.update_order(o, self.owner, None, {"lines": [{"variant_id": self.peri.id, "qty": 1},
+                                                                   {"variant_id": water.id, "qty": 1}], "version": o.version})
+        self.assertEqual(o.total, D("150.00"))
+
+    def test_table_number_only_for_dine_in(self):
+        a = self.order(order_type="dine_in", table_no=" 4 ")
+        b = self.order(order_type="takeaway", table_no="4")
+        self.assertEqual(a.table_no, "4")
+        self.assertEqual(a.label, f"#{a.token_no} · T4")
+        self.assertEqual(b.table_no, "")
+
+    def test_old_version_rejected(self):
+        o = self.order()
+        services.update_order(o, self.owner, None, {"lines": [{"variant_id": self.peri.id, "qty": 2}], "version": o.version})
+        with self.assertRaises(services.OrderError):  # second phone still had the old copy open
+            services.update_order(o, self.owner, None, {"lines": [{"variant_id": self.peri.id, "qty": 3}], "version": o.version})
 
     def test_pages_staff_cannot_open(self):
         c = Client()
@@ -134,6 +161,49 @@ class StaffLimitTests(Base):
         for url in ["/money/", "/menu/", "/team/", "/settings/", "/audit/", "/money/reports/", "/stock/recipes/"]:
             self.assertEqual(c.get(url).status_code, 403, url)
         self.assertEqual(c.get("/pos/").status_code, 200)
+
+
+class V3Tests(Base):
+    def test_default_type_is_dine_in_and_online_defaults_to_zomato(self):
+        self.assertEqual(self.order(order_type="").order_type, "dine_in")
+        o = self.order(order_type="online")
+        self.assertEqual(o.platform, "zomato")
+        self.assertEqual(self.order(order_type="online", platform="foodatdoor").get_platform_display(), "FoodAtDoor")
+
+    def test_dine_in_closes_when_table_pays_on_leaving(self):
+        o = self.order(order_type="dine_in", table_no="2")
+        self.assertEqual(o.status, OrderStatus.PENDING)
+        services.add_payment(o, self.owner, None, "cash", "140")
+        o.refresh_from_db()
+        self.assertEqual(o.status, OrderStatus.COMPLETED)
+
+    def test_paying_up_front_keeps_order_in_kitchen(self):
+        o = self.order(order_type="takeaway", payment={"method": "upi", "amount": "140"})
+        self.assertEqual(o.status, OrderStatus.PENDING)
+        o2 = self.order(order_type="dine_in", payment={"method": "cash", "amount": "140"})
+        self.assertEqual(o2.status, OrderStatus.PENDING)
+
+    def test_completed_is_final(self):
+        o = self.order(payment={"method": "cash", "amount": "140"})
+        services.set_status(o, self.owner, "completed")
+        with self.assertRaises(services.OrderError):
+            services.set_status(o, self.owner, "ready")
+        c = Client(); c.login(username="owner", password="Owner@12345")
+        self.assertNotContains(c.get(f"/orders/{o.pk}/"), "Mark ready")
+
+    def test_upi_qr(self):
+        from core.models import ShopSettings
+        c = Client(); c.login(username="owner", password="Owner@12345")
+        self.assertEqual(c.get("/upi/qr.svg?amount=150").status_code, 400)  # no UPI ID yet
+        shop = ShopSettings.load(); shop.upi_id = "lavish@okaxis"; shop.save()
+        r = c.get("/upi/qr.svg?amount=150&note=LS-1")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("svg", r["Content-Type"])
+        o = self.order()
+        self.assertContains(c.get(f"/orders/{o.pk}/receipt/"), "Scan to pay")
+        self.assertEqual(c.get(f"/orders/{o.pk}/receipt.pdf").status_code, 200)
+        from core.upi import upi_link
+        self.assertEqual(upi_link(shop, D("150"), "LS-1"), "upi://pay?pa=lavish@okaxis&pn=Lavish%20Shawarma&cu=INR&am=150.00&tn=LS-1")
 
 
 class StockTests(Base):
@@ -231,3 +301,54 @@ class MiscTests(Base):
                                                "payment": {"method": "cash", "amount": 140}}), content_type="application/json")
         self.assertEqual(r.json()["total"], 140.0)
         self.assertEqual(r.json()["balance"], 0.0)
+
+
+import shutil
+import tempfile
+
+from django.test import override_settings
+
+_DEMO_TMP = tempfile.mkdtemp(prefix="lavish-demo-test-")
+
+
+@override_settings(DEMO_DIR=_DEMO_TMP, DEMO_PER_IP_PER_HOUR=100)
+class DemoTests(Base):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(_DEMO_TMP, ignore_errors=True)
+
+    def test_demo_is_isolated_from_real_data(self):
+        real_orders, real_users = Order.objects.count(), User.objects.count()
+        c = Client()
+        r = c.post("/demo/start/")
+        self.assertEqual(r.status_code, 302)
+        r = c.get("/demo/enter/", follow=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "resets in")
+        # make orders inside the demo
+        v = self.peri.id
+        for _ in range(3):
+            r = c.post("/orders/new/", json.dumps({"lines": [{"variant_id": v, "qty": 1}]}), content_type="application/json")
+            self.assertTrue(r.json()["ok"], r.content)
+        self.assertEqual(c.get("/money/").status_code, 200)
+        self.assertGreater(c.get("/pos/recent.json").json()["open"].__len__(), 0)
+        # the real database did not change
+        self.assertEqual(Order.objects.count(), real_orders)
+        self.assertEqual(User.objects.count(), real_users)
+        self.assertFalse(User.objects.filter(username="demo").exists())
+        # ending the demo deletes its file
+        from core import demo
+        self.assertEqual(len(list(demo.sandbox_dir().glob("*.sqlite3"))), 1)
+        c.get("/demo/end/")
+        self.assertEqual(len(list(demo.sandbox_dir().glob("*.sqlite3"))), 0)
+
+    def test_demo_expires(self):
+        from core import demo
+        c = Client()
+        c.post("/demo/start/")
+        c.get("/demo/enter/")
+        with override_settings(DEMO_MINUTES=0):
+            r = c.get("/pos/")
+        self.assertRedirects(r, "/login/?demo=ended", fetch_redirect_response=False)
+        demo.cleanup(force=True)

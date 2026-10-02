@@ -63,6 +63,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "core.demo.DemoMiddleware",  # demo visitors get their own private database copy
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -96,8 +97,14 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ---------------------------------------------------------------- database
+import sys
+
+RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == "test"
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-if DATABASE_URL:
+if RUNNING_TESTS:
+    # Tests always use a throwaway local database — never Supabase (faster, and leaves nothing behind).
+    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "test_db.sqlite3"}}
+elif DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
@@ -179,6 +186,16 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# Demo mode ("Try the demo" on the login page) — see core/demo.py
+DEMO_ENABLED = env_bool("DEMO_ENABLED", True)
+DEMO_MINUTES = int(os.getenv("DEMO_MINUTES", "15"))
+DEMO_DIR = Path(os.getenv("DEMO_DIR", str(BASE_DIR / "demo_data")))
+DEMO_MAX_SANDBOXES = int(os.getenv("DEMO_MAX_SANDBOXES", "40"))
+DEMO_PER_IP_PER_HOUR = int(os.getenv("DEMO_PER_IP_PER_HOUR", "8"))
+DEMO_MAX_NEW_ORDERS = 60
+DEMO_MAX_ORDERS_PER_MINUTE = 12
+DEMO_MAX_MB = 25
 
 # Login protection: lock a username+IP after this many failures for this many minutes.
 LOGIN_MAX_FAILURES = 5

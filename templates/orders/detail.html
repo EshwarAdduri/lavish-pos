@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ order.bill_number }}{% endblock %}
-{% block topbar_title %}Bill #{{ order.token_no }}{% endblock %}
+{% block topbar_title %}Bill {{ order.label }}{% endblock %}
 {% block content %}
 <div id="order-body" hx-get="/orders/{{ order.pk }}/" hx-trigger="orders-changed from:body" hx-swap="innerHTML">
   {% include "orders/_detail_body.html" %}

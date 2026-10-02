@@ -10,7 +10,7 @@ from .models import Device
 from .utils import set_current_request
 
 DEVICE_COOKIE = "ls_device"
-PUBLIC_PREFIXES = ("/login", "/static/", "/healthz", "/manifest.webmanifest", "/sw.js", "/offline", "/favicon")
+PUBLIC_PREFIXES = ("/demo/", "/login", "/static/", "/healthz", "/manifest.webmanifest", "/sw.js", "/offline", "/favicon")
 
 
 class DeviceMiddleware:

@@ -7,6 +7,7 @@ from django.db.models import F, Prefetch, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from core.models import AuditLog, ShopSettings
@@ -15,7 +16,7 @@ from core.utils import today
 from menu.models import Category, Item, Variant
 
 from . import services
-from .models import ApprovalRequest, Order, OrderStatus, OrderType, PaymentMethod, Platform
+from .models import ACTIVE_ORDER_TYPES, ApprovalRequest, Order, OrderStatus, OrderType, PaymentMethod, Platform
 from .receipt import receipt_pdf
 from .services import OrderError
 
@@ -65,9 +66,15 @@ def _order_for_edit(order: Order):
     return {
         "id": order.id,
         "bill": order.bill_number,
+        "token": order.token_no,
+        "label": order.label,
         "version": order.version,
+        "total": float(order.total),
+        "paid": float(order.paid_amount),
+        "status": order.status,
         "order_type": order.order_type,
         "platform": order.platform,
+        "table_no": order.table_no,
         "customer_name": order.customer_name,
         "customer_phone": order.customer_phone,
         "note": order.note,
@@ -95,13 +102,12 @@ def pos(request):
         try:
             if order.status == OrderStatus.CANCELLED:
                 raise OrderError("Cancelled orders cannot be edited.")
-            if not request.user.is_owner and (order.paid_amount > 0 or order.status not in (OrderStatus.PENDING, OrderStatus.PREPARING)):
-                raise OrderError("Only the owner can edit a paid or finished order.")
             edit = _order_for_edit(order)
         except OrderError as e:
             messages.error(request, str(e))
             return redirect("order_detail", pk=order.pk)
     staff_cap = None if request.user.is_owner else shop.staff_max_discount_percent
+    tables = [str(n) for n in range(1, shop.table_count + 1)]
     return render(
         request,
         "orders/pos.html",
@@ -109,11 +115,15 @@ def pos(request):
             "menu": menu_payload(),
             "edit": edit,
             "pos_config": {
-                "orderTypes": OrderType.choices,
+                "orderTypes": [(t.value, t.label) for t in ACTIVE_ORDER_TYPES],
+                "upi": bool(shop.upi_id.strip()),
                 "platforms": [p for p in Platform.choices if p[0]],
                 "methods": PaymentMethod.choices,
                 "staffDiscountCap": staff_cap,
+                "isOwner": request.user.is_owner,
+                "tables": tables,
                 "urls": {
+                    "recent": reverse("pos_recent"),
                     "create": reverse("order_create"),
                     "menu": reverse("pos_menu"),
                     "receipt": "/orders/0/receipt/",
@@ -129,6 +139,74 @@ def pos_menu(request):
     return JsonResponse(menu_payload())
 
 
+def _recent_card(o: Order):
+    return {
+        "id": o.id,
+        "token": o.token_no,
+        "label": o.label,
+        "bill": o.bill_number,
+        "table": o.table_no,
+        "type": o.get_order_type_display(),
+        "platform": o.get_platform_display() if o.platform else "",
+        "status": o.status,
+        "statusLabel": o.get_status_display(),
+        "total": float(o.total),
+        "paid": float(o.paid_amount),
+        "balance": float(o.balance),
+        "time": timezone.localtime(o.created_at).strftime("%I:%M %p").lstrip("0"),
+        "items": [f"{i.quantity}× {i.display_name}" for i in o.items.all()],
+        "customer": o.customer_name,
+    }
+
+
+@require_GET
+def pos_recent(request):
+    """Open orders first (not finished or not paid), then the latest others — 10 cards in total (more if many are open)."""
+    since = today() - timedelta(days=1)
+    base = Order.objects.filter(business_date__gte=since).exclude(status=OrderStatus.CANCELLED).prefetch_related("items")
+    open_q = Q(status__in=[OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY]) | Q(paid_amount__lt=F("total"))
+    open_orders = list(base.filter(open_q).order_by("-created_at")[:30])
+    rest = list(base.exclude(pk__in=[o.pk for o in open_orders]).order_by("-created_at")[: max(0, 10 - len(open_orders))])
+    return JsonResponse({
+        "open": [_recent_card(o) for o in open_orders],
+        "done": [_recent_card(o) for o in rest],
+    })
+
+
+@require_GET
+def order_edit_json(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    if order.status == OrderStatus.CANCELLED:
+        return JsonResponse({"ok": False, "error": "This order is cancelled."}, status=400)
+    return JsonResponse({"ok": True, "order": _order_for_edit(order)})
+
+
+@require_POST
+def order_pay_json(request, pk):
+    """Collect what's due on a bill straight from the billing screen."""
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        data = _json_body(request)
+        services.add_payment(order, request.user, request.device, data.get("method"),
+                             data.get("amount") or order.balance, cash_tendered=data.get("cash_tendered"),
+                             reference=data.get("reference", ""))
+        order.refresh_from_db()
+    except OrderError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+    return JsonResponse(_order_json(order))
+
+
+@require_POST
+def order_status_json(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        data = _json_body(request)
+        order = services.set_status(order, request.user, data.get("status"))
+    except OrderError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+    return JsonResponse({"ok": True, "status": order.status})
+
+
 def _json_body(request):
     try:
         return json.loads(request.body.decode() or "{}")
@@ -142,6 +220,7 @@ def _order_json(order: Order):
         "id": order.id,
         "bill": order.bill_number,
         "token": order.token_no,
+        "label": order.label,
         "total": float(order.total),
         "paid": float(order.paid_amount),
         "balance": float(order.balance),
@@ -250,8 +329,7 @@ def order_detail(request, pk):
         ],
         "approvals": order.approvals.select_related("requested_by", "decided_by"),
         "history": history,
-        "can_edit": order.status != OrderStatus.CANCELLED
-        and (request.user.is_owner or (order.paid_amount == 0 and order.status in (OrderStatus.PENDING, OrderStatus.PREPARING))),
+        "can_edit": order.status != OrderStatus.CANCELLED,
     }
     template = "orders/_detail_body.html" if request.headers.get("HX-Request") else "orders/detail.html"
     return render(request, template, ctx)

@@ -22,6 +22,9 @@
       <p class="muted">{{ shop.tagline|default:"Billing & money tracker" }}</p>
     </div>
     {% if error %}<div class="alert alert-bad">{{ error }}</div>{% endif %}
+    {% if request.GET.demo == "ended" %}<div class="alert alert-info">Your demo time is over and its data was deleted. Start a fresh one any time.</div>{% endif %}
+    {% if request.GET.demo == "bye" %}<div class="alert alert-info">Demo closed and its data deleted. Thanks for trying it!</div>{% endif %}
+    {% if demo %}<div class="alert alert-warn">You're in demo mode. <a href="/demo/end/">End demo</a> to log in to the real shop.</div>{% endif %}
     <div class="field">
       <label for="u">Username</label>
       <input id="u" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" required autofocus>
@@ -31,8 +34,15 @@
       <input id="p" type="password" name="password" autocomplete="current-password" required>
     </div>
     <button class="btn btn-primary btn-lg btn-block" type="submit">Log in</button>
-    <p class="small muted center" style="margin:0">{{ shop.address }}</p>
   </form>
+  {% if demo_enabled %}
+  <form class="card login-card demo-card" method="post" action="/demo/start/">
+    {% csrf_token %}
+    <div class="spread"><div><strong>Just looking?</strong><div class="small muted">Open a private demo shop with sample data. It deletes itself after 15 minutes and never touches real data.</div></div></div>
+    <button class="btn btn-lg btn-block mt-s" type="submit">Try the demo</button>
+  </form>
+  {% endif %}
+  <p class="small muted center" style="margin:0">{{ shop.address }}</p>
 </main>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(function(){})}</script>
 </body>

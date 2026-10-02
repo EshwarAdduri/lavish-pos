@@ -8,3 +8,4 @@ python manage.py collectstatic --no-input
 python manage.py migrate --no-input
 python manage.py seed_shop        # only adds the starter menu if the menu is empty
 python manage.py ensure_owner     # only creates the owner login if it doesn't exist
+python manage.py build_demo       # sample data for "Try the demo" (separate file, never the real database)
